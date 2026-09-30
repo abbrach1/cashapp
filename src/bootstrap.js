@@ -8,31 +8,26 @@ import { createPlaidClient } from './providers/plaid.js';
 import { UserError } from './core/errors.js';
 
 /**
- * Create the real store on first use. A broken Firebase key then fails only
- * the requests that need data (with a clear message) while the setup screen
- * (/api/config) keeps working.
+ * Create the real store on first use. If Firebase cannot load or the key is
+ * broken, only requests that need data fail (with a clear message) while the
+ * setup screen (/api/config) keeps working.
+ * @param {() => Promise<any>} factory
  */
 function lazyStore(factory) {
-  let instance;
-  let failure;
-  const get = () => {
-    if (instance) return instance;
-    if (failure) throw failure;
-    try {
-      instance = factory();
-      return instance;
-    } catch (err) {
-      failure = new UserError(`Server configuration: ${err.message}`, 500);
-      throw failure;
-    }
-  };
+  let pending;
+  const get = () =>
+    (pending ??= factory().catch((err) => {
+      throw new UserError(`Server configuration: ${err.message}`, 500);
+    }));
   return new Proxy(
     {},
     {
       get(_target, prop) {
-        const target = get();
-        const value = target[prop];
-        return typeof value === 'function' ? value.bind(target) : value;
+        if (prop === 'then') return undefined; // not a promise itself
+        return async (...args) => {
+          const store = await get();
+          return store[prop](...args);
+        };
       },
     },
   );
@@ -46,13 +41,17 @@ export async function buildApp({ env = process.env, serveStatic = false } = {}) 
   if (config.store === 'memory') {
     store = new MemoryStore();
   } else {
-    const { firestore } = await import('./firebase.js');
-    const { FirestoreStore } = await import('./store/firestore.js');
-    store = lazyStore(() => new FirestoreStore(firestore(config)));
+    store = lazyStore(async () => {
+      const { firestore } = await import('./firebase.js');
+      const { FirestoreStore } = await import('./store/firestore.js');
+      return new FirestoreStore(firestore(config));
+    });
   }
   if (!config.authDisabled) {
-    const { firebaseAuth } = await import('./firebase.js');
-    verifyToken = (token) => firebaseAuth(config).verifyIdToken(token);
+    verifyToken = async (token) => {
+      const { firebaseAuth } = await import('./firebase.js');
+      return firebaseAuth(config).verifyIdToken(token);
+    };
   }
   let plaidClient;
   const plaid = async () => (plaidClient ??= await createPlaidClient(config));

@@ -24,5 +24,10 @@
     "test": "node --test \"test/**/*.test.js\"",
     "test:firestore": "firebase emulators:exec --only firestore --project demo-reimbursements \"node --test test/firestore.emulator.test.js\"",
     "vendor": "node scripts/build-vendor.js"
+  },
+  "overrides": {
+    "jwks-rsa": {
+      "jose": "4.15.9"
+    }
   }
 }

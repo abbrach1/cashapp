@@ -74,7 +74,7 @@ test('web config and service account from different projects are flagged', () =>
 
 test('preview deployments explain Production-only variables', () => {
   const c = loadConfig({ VERCEL: '1', VERCEL_ENV: 'preview', VERCEL_GIT_COMMIT_REF: 'main', VERCEL_GIT_COMMIT_SHA: 'f18c2a00de99' });
-  assert.deepEqual(c.deployment, { vercelEnv: 'preview', branch: 'main', commit: 'f18c2a0' });
+  assert.deepEqual(c.deployment, { vercelEnv: 'preview', branch: 'main', commit: 'f18c2a0', node: process.version });
   assert.match(configProblems(c).at(-1), /Preview deployment \(branch "main"\).*enable them for Preview too/);
   const ok = loadConfig({
     VERCEL: '1',

@@ -11,9 +11,11 @@ export function SetupStatus({ config }) {
   return html`<div class="setup-status">
     ${d.vercelEnv
       ? html`<div class="small">
-          This is the <b>${d.vercelEnv}</b> deployment${d.branch ? html` of branch <code>${d.branch}</code>` : null}${d.commit ? html` (${d.commit})` : null}.
+          This is the <b>${d.vercelEnv}</b> deployment${d.branch ? html` of branch <code>${d.branch}</code>` : null}${d.commit ? html` (${d.commit})` : null}${d.node ? html`, running Node ${d.node}` : null}.
         </div>`
-      : null}
+      : d.node
+        ? html`<div class="small muted">Running Node ${d.node}.</div>`
+        : null}
     <ul class="checklist">
       ${setup.checklist.map((i) => {
         const state = i.invalid ? 'bad' : i.set ? 'ok' : i.required ? 'bad' : 'opt';

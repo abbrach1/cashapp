@@ -113,6 +113,7 @@ export function loadConfig(env = process.env) {
       vercelEnv: e('VERCEL_ENV'),
       branch: e('VERCEL_GIT_COMMIT_REF'),
       commit: e('VERCEL_GIT_COMMIT_SHA')?.slice(0, 7) ?? null,
+      node: process.version,
     },
   };
 }
