@@ -3,6 +3,7 @@ import { del, download, post } from '../api.js';
 import { attempt, refresh, useStore } from '../store.js';
 import { AsyncButton, Field } from '../ui.js';
 import { RuleDialog } from '../components/dialogs.js';
+import { SetupStatus } from '../components/setup.js';
 import { signOut } from '../auth.js';
 
 const listText = (list) => (list ?? []).join(', ');
@@ -120,6 +121,16 @@ export function SettingsPage() {
           : null}
       </div>
     </div>
+
+    ${config?.setup
+      ? html`<div class="card">
+          <div class="card-head"><h2>Server setup</h2><span class="small muted">What this deployment sees (names only)</span></div>
+          <div class="card-body stack">
+            ${config.problems?.length ? html`<div class="callout warn small"><ul style="margin:0;padding-left:18px">${config.problems.map((p) => html`<li>${p}</li>`)}</ul></div>` : null}
+            <${SetupStatus} config=${config} />
+          </div>
+        </div>`
+      : null}
 
     <${RuleDialog} open=${ruleOpen} onClose=${() => setRuleOpen(false)} />
   </div>`;

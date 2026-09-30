@@ -194,11 +194,26 @@ test('sign-in: token required, allow-list enforced, users isolated', async (t) =
   };
   const s = await serve(
     { AUTH_DISABLED: '0', ALLOWED_EMAILS: 'Me@Example.com' },
-    { verifyToken: async (tok) => tokens[tok] ?? Promise.reject(new Error('bad')) },
+    {
+      verifyToken: async (tok) => {
+        if (tokens[tok]) return tokens[tok];
+        if (tok === 'broken-server') throw new Error('Failed to parse private key');
+        if (tok === 'other-project') throw Object.assign(new Error('Firebase ID token has incorrect "aud" (audience) claim. Expected "a" but got "b".'), { code: 'auth/argument-error' });
+        throw Object.assign(new Error('Decoding Firebase ID token failed'), { code: 'auth/argument-error' });
+      },
+    },
   );
   t.after(s.close);
   assert.equal((await s.call('GET', '/api/state')).status, 401);
-  assert.equal((await s.call('GET', '/api/state', undefined, { authorization: 'Bearer nope' })).status, 401);
+  const expired = await s.call('GET', '/api/state', undefined, { authorization: 'Bearer nope' });
+  assert.equal(expired.status, 401);
+  assert.match(expired.body.error, /sign in again/);
+  const mismatch = await s.call('GET', '/api/state', undefined, { authorization: 'Bearer other-project' });
+  assert.equal(mismatch.status, 401);
+  assert.match(mismatch.body.error, /setup mismatch.*audience/);
+  const broken = await s.call('GET', '/api/state', undefined, { authorization: 'Bearer broken-server' });
+  assert.equal(broken.status, 500);
+  assert.match(broken.body.error, /Server configuration: could not verify sign-in \(Failed to parse private key\)/);
   const denied = await s.call('GET', '/api/state', undefined, { authorization: 'Bearer other' });
   assert.equal(denied.status, 403);
   assert.match(denied.body.error, /someone@example.com is not allowed/);

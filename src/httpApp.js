@@ -4,7 +4,7 @@ import path from 'node:path';
 import { timingSafeEqual } from 'node:crypto';
 import { apiRouter } from './routes/api.js';
 import { authGuard, csrfGuard, hostGuard, securityHeaders } from './security.js';
-import { configProblems } from './config.js';
+import { configProblems, envChecklist } from './config.js';
 import { UserError } from './core/errors.js';
 import { ConflictError } from './store/model.js';
 import { syncAll } from './core/sync.js';
@@ -40,6 +40,8 @@ export function createApp(deps) {
       firebase: config.authDisabled ? null : { ...config.firebase.web, authEmulatorHost: config.firebase.authEmulatorHost },
       plaid: { enabled: Boolean(config.plaid.clientId && config.plaid.secret), env: config.plaid.env, redirectUri: config.plaid.redirectUri },
       problems: configProblems(config),
+      // Names only (never values), so a misconfigured deployment can be diagnosed.
+      setup: { deployment: config.deployment, checklist: envChecklist(config) },
     });
   });
 

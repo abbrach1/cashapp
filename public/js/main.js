@@ -5,6 +5,7 @@ import { useRoute } from './router.js';
 import { getStore, refresh, setStore, useStore } from './store.js';
 import { AsyncButton, LoadingPage, Toasts } from './ui.js';
 import { isStale, resumeOAuthIfNeeded, syncNow } from './connect.js';
+import { SetupStatus } from './components/setup.js';
 import { OverviewPage } from './pages/overview.js';
 import { BillsPage } from './pages/bills.js';
 import { BillPage } from './pages/bill.js';
@@ -103,21 +104,32 @@ function SignIn({ problem }) {
       <div class="brand" style="justify-content:center"><span class="brand-mark">$</span><span>${config?.appName ?? 'Reimbursements'}</span></div>
       <p class="muted">Track card statements, what your company owes you, and the Zelle payments that settle them.</p>
       ${problem ? html`<div class="callout danger small">${problem}</div>` : null}
-      ${config?.problems?.length
-        ? html`<div class="callout warn small" style="text-align:left">
-            <b>Setup needed:</b>
-            <ul style="margin:6px 0 0;padding-left:18px">${config.problems.map((p) => html`<li>${p}</li>`)}</ul>
-          </div>`
-        : null}
+      <${SetupProblems} config=${config} />
       ${authError ? html`<div class="callout danger small">${authError}</div>` : null}
       <${AsyncButton} class="btn primary" onClick=${signIn}>Sign in with Google<//>
+      ${config?.problems?.length ? null : html`<details class="small muted" style="text-align:left"><summary>Server setup</summary><${SetupStatus} config=${config} /></details>`}
     </div>
     <${Toasts} />
   </div>`;
 }
 
-function Fatal({ message }) {
-  return html`<div class="signin"><div class="card"><h2>Can't start</h2><p class="muted">${message}</p></div></div>`;
+function SetupProblems({ config }) {
+  if (!config?.problems?.length) return null;
+  return html`<div class="callout warn small stack" style="text-align:left">
+    <div>
+      <b>Setup needed:</b>
+      <ul style="margin:6px 0 0;padding-left:18px">${config.problems.map((p) => html`<li>${p}</li>`)}</ul>
+    </div>
+    <${SetupStatus} config=${config} />
+  </div>`;
+}
+
+function Fatal({ message, config }) {
+  return html`<div class="signin"><div class="card stack" style="text-align:left;width:min(560px,100%)">
+    <h2>Can't start yet</h2>
+    ${message ? html`<p class="muted" style="margin:0">${message}</p>` : null}
+    <${SetupProblems} config=${config} />
+  </div></div>`;
 }
 
 async function start() {
@@ -141,7 +153,7 @@ async function start() {
   }
 
   if (!config.firebase?.apiKey) {
-    render(html`<${Fatal} message=${config.problems?.join(' ') || 'Sign-in is not configured on the server.'} />`, root);
+    render(html`<${Fatal} config=${config} message=${config.problems?.length ? '' : 'Sign-in is not configured on the server.'} />`, root);
     return;
   }
   const auth = await import('./auth.js');

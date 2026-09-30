@@ -66,14 +66,14 @@ You need three free accounts: Firebase, Vercel and Plaid (or SimpleFIN instead o
 ### 3. Deploy to Vercel
 
 1. On [vercel.com](https://vercel.com): **Add New → Project** and import this GitHub repository. Keep the framework preset as **Other**; `vercel.json` already configures the API function, the static site and the daily cron.
-2. Add these **Environment Variables** (see [`.env.example`](.env.example) for descriptions):
+2. Add these **Environment Variables** (see [`.env.example`](.env.example) for descriptions). Leave all three environments (Production, Preview, Development) ticked for each one:
 
    | Variable | Value |
    | --- | --- |
    | `ALLOWED_EMAILS` | Your Google account email (comma-separate several) |
-   | `FIREBASE_PROJECT_ID` | Your Firebase project id |
    | `FIREBASE_SERVICE_ACCOUNT` | The base64 service-account key from step 1.5 |
-   | `FIREBASE_WEB_API_KEY`, `FIREBASE_AUTH_DOMAIN`, `FIREBASE_APP_ID` | From step 1.4 |
+   | `FIREBASE_WEB_CONFIG` | The whole `firebaseConfig = { … }` snippet from step 1.4, pasted as is (or set `FIREBASE_WEB_API_KEY`, `FIREBASE_AUTH_DOMAIN`, `FIREBASE_APP_ID` separately) |
+   | `FIREBASE_PROJECT_ID` | Optional: read from the service-account key when not set |
    | `TOKEN_ENCRYPTION_KEY` | A long random string (`openssl rand -base64 32`); encrypts bank tokens |
    | `CRON_SECRET` | Another long random string; protects the daily sync |
    | `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV=production` | From Plaid (skip if you only use SimpleFIN/CSV) |
@@ -176,6 +176,12 @@ Everything lives under `users/{uid}`: `accounts`, `bills`, `reimbursements`, `ru
 
 ## Troubleshooting
 
+- **Vercel isn't picking up my settings / environment variables:**
+  - Vercel only applies variables to **new** deployments. After adding or changing any, go to **Deployments → ⋯ → Redeploy**, or push a commit.
+  - Each variable has environment checkboxes. A variable enabled only for **Production** doesn't reach **Preview** deployments. Pushes to any branch other than the production branch are previews.
+  - Vercel picks the production branch at import time (the repository's default branch then). Check **Settings → Git → Production Branch** is `main`.
+  - Open the deployed app: the setup screen (or **Settings → Server setup** once signed in) lists every variable this deployment sees. It shows ✓/✗ and whether it's Production or Preview, never the values.
+  - Build settings such as *Framework Preset* and *Output Directory* are set by [`vercel.json`](vercel.json), which takes priority over the dashboard. That's intended; no dashboard changes are needed.
 - **The sign-in page lists "Setup needed" items:** add the missing environment variables in Vercel and redeploy.
 - **Google sign-in fails with `auth/unauthorized-domain`:** add your Vercel domain under Firebase → Authentication → Settings → Authorized domains.
 - **"… is not allowed to use this app":** add that email to `ALLOWED_EMAILS` and redeploy.

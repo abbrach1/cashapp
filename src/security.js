@@ -53,8 +53,17 @@ export function authGuard(config, verifyToken) {
     let decoded;
     try {
       decoded = await verifyToken(m[1]);
-    } catch {
-      return res.status(401).json({ error: 'Your session expired, please sign in again' });
+    } catch (err) {
+      const code = String(err?.code ?? '');
+      const message = String(err?.message ?? '');
+      if (/audience|"aud"|project/i.test(message) && code.startsWith('auth/')) {
+        // Token from a different Firebase project than the server's key.
+        return res.status(401).json({ error: `Sign-in setup mismatch: ${message}` });
+      }
+      if (code.startsWith('auth/')) return res.status(401).json({ error: 'Your session expired, please sign in again' });
+      // Not a token problem: the server cannot check tokens (bad key/config).
+      console.error('Token verification failed:', err);
+      return res.status(500).json({ error: `Server configuration: could not verify sign-in (${message || 'unknown error'})` });
     }
     const email = String(decoded.email ?? '').toLowerCase();
     if (!email || decoded.email_verified === false || !config.allowedEmails.includes(email)) {

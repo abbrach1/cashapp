@@ -2,48 +2,31 @@ import { cert, getApps, initializeApp, applicationDefault } from 'firebase-admin
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 
-/**
- * Parse FIREBASE_SERVICE_ACCOUNT, which may hold the service-account JSON
- * itself or the same JSON base64-encoded (easier to paste into Vercel).
- * @param {string|undefined} raw
- */
-export function parseServiceAccount(raw) {
-  if (!raw) return null;
-  const text = raw.trim().startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf8');
-  try {
-    const json = JSON.parse(text);
-    if (!json.client_email || !json.private_key) throw new Error('missing fields');
-    return json;
-  } catch {
-    throw new Error('FIREBASE_SERVICE_ACCOUNT must be the service account JSON (or that JSON base64-encoded)');
-  }
-}
-
 let app;
 
-/** @param {ReturnType<typeof import('./config.js').loadConfig>} config */
+/** @param {import('./config.js').Config} config */
 export function firebaseApp(config) {
   if (app) return app;
   if (getApps().length) {
     app = getApps()[0];
     return app;
   }
-  const { projectId, serviceAccount, clientEmail, privateKey } = config.firebase;
-  const sa = parseServiceAccount(serviceAccount);
+  const { projectId, serviceAccount, serviceAccountError, clientEmail, privateKey } = config.firebase;
+  if (serviceAccountError) throw new Error(serviceAccountError);
   let credential;
-  if (sa) credential = cert(sa);
+  if (serviceAccount) credential = cert(serviceAccount);
   else if (clientEmail && privateKey) {
     credential = cert({ projectId, clientEmail, privateKey: privateKey.replace(/\\n/g, '\n') });
   } else if (!process.env.FIRESTORE_EMULATOR_HOST) {
     credential = applicationDefault();
   }
-  app = initializeApp({ ...(credential ? { credential } : {}), projectId: projectId ?? sa?.project_id });
+  app = initializeApp({ ...(credential ? { credential } : {}), projectId: projectId ?? serviceAccount?.project_id });
   return app;
 }
 
 let db;
 
-/** @param {ReturnType<typeof import('./config.js').loadConfig>} config */
+/** @param {import('./config.js').Config} config */
 export function firestore(config) {
   if (db) return db;
   db = getFirestore(firebaseApp(config));
@@ -51,7 +34,7 @@ export function firestore(config) {
   return db;
 }
 
-/** @param {ReturnType<typeof import('./config.js').loadConfig>} config */
+/** @param {import('./config.js').Config} config */
 export function firebaseAuth(config) {
   return getAuth(firebaseApp(config));
 }

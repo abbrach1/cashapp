@@ -1022,6 +1022,49 @@ dialog.modal::backdrop {
   }
 }
 
+/* ---------- setup checklist ---------- */
+
+.setup-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+.checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.checklist li {
+  display: grid;
+  grid-template-columns: 18px minmax(0, auto) 1fr;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 0.85rem;
+}
+.checklist code {
+  font-size: 0.8rem;
+  word-break: break-all;
+}
+.checklist .note {
+  color: var(--muted);
+  text-align: right;
+  font-size: 0.8rem;
+}
+.checklist li.ok .mark {
+  color: var(--ok);
+}
+.checklist li.bad .mark,
+.checklist li.bad .note {
+  color: var(--danger);
+  font-weight: 650;
+}
+.checklist li.opt .mark {
+  color: var(--muted);
+}
+
 /* ---------- small screens ---------- */
 
 @media (max-width: 860px) {
