@@ -22,9 +22,11 @@ test('values pasted with quotes or spaces are cleaned', () => {
   assert.equal(c.plaid.envError, null);
 });
 
-test('a wrong PLAID_ENV is reported instead of crashing', () => {
+test('Plaid defaults to production; a wrong PLAID_ENV is reported instead of crashing', () => {
+  assert.equal(loadConfig({}).plaid.env, 'production');
+  assert.equal(loadConfig({ PLAID_ENV: 'Sandbox' }).plaid.env, 'sandbox');
   const c = loadConfig({ PLAID_ENV: 'development' });
-  assert.equal(c.plaid.env, 'sandbox');
+  assert.equal(c.plaid.env, 'production');
   assert.match(configProblems(c).join('\n'), /PLAID_ENV is "development"/);
 });
 

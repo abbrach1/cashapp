@@ -66,7 +66,8 @@ export function loadConfig(env = process.env) {
   const store = e('STORE') || (demo ? 'memory' : 'firestore');
   const authDisabled = !onVercel && (demo || truthy('AUTH_DISABLED'));
 
-  const rawPlaidEnv = (e('PLAID_ENV') ?? 'sandbox').toLowerCase();
+  // Production = your real bank (Plaid's free Trial plan). Sandbox only has test banks.
+  const rawPlaidEnv = (e('PLAID_ENV') ?? 'production').toLowerCase();
   const plaidEnvValid = ['sandbox', 'production'].includes(rawPlaidEnv);
 
   const sa = parseServiceAccount(e('FIREBASE_SERVICE_ACCOUNT'));
@@ -104,7 +105,7 @@ export function loadConfig(env = process.env) {
     plaid: {
       clientId: e('PLAID_CLIENT_ID'),
       secret: e('PLAID_SECRET'),
-      env: plaidEnvValid ? rawPlaidEnv : 'sandbox',
+      env: plaidEnvValid ? rawPlaidEnv : 'production',
       envError: plaidEnvValid ? null : rawPlaidEnv,
       redirectUri: e('PLAID_REDIRECT_URI'),
       daysRequested: Math.min(730, Math.max(30, Number(e('PLAID_DAYS_REQUESTED')) || 365)),
@@ -134,7 +135,12 @@ export function envChecklist(config) {
     { name: 'FIREBASE_PROJECT_ID', set: Boolean(f.projectId), required: config.store === 'firestore', detail: f.projectId },
     { name: 'TOKEN_ENCRYPTION_KEY', set: Boolean(config.tokenKey), required: config.store === 'firestore' },
     { name: 'CRON_SECRET', set: Boolean(config.cronSecret), required: config.onVercel },
-    { name: 'PLAID_CLIENT_ID + PLAID_SECRET', set: Boolean(config.plaid.clientId && config.plaid.secret), required: false, detail: config.plaid.clientId && config.plaid.secret ? config.plaid.env : 'optional' },
+    {
+      name: 'PLAID_CLIENT_ID + PLAID_SECRET',
+      set: Boolean(config.plaid.clientId && config.plaid.secret),
+      required: false,
+      detail: config.plaid.clientId && config.plaid.secret ? (config.plaid.env === 'sandbox' ? 'sandbox (test banks only)' : 'production') : 'optional',
+    },
   ];
   return items;
 }
@@ -161,7 +167,7 @@ export function configProblems(config) {
     problems.push(`The Firebase web config is for project "${f.web.projectId}" but the service account is for "${saProject}". Both must come from the same Firebase project.`);
   }
   if (config.plaid.envError) {
-    problems.push(`PLAID_ENV is "${config.plaid.envError}", but it must be "production" or "sandbox". Plaid is using sandbox until you fix it.`);
+    problems.push(`PLAID_ENV is "${config.plaid.envError}", but it must be "production" or "sandbox". Plaid is using production until you fix it.`);
   }
   if (config.onVercel && !config.cronSecret) {
     problems.push('CRON_SECRET is not set, so the daily bank sync cannot run.');

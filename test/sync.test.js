@@ -176,6 +176,20 @@ test('Plaid: login errors mark the connection for re-authentication', async () =
   assert.equal(req.products, undefined);
 });
 
+test('Plaid: wrong keys for the environment get an actionable message', async () => {
+  const reject = (code, message) => async () => {
+    const err = new Error(message);
+    err.response = { data: { error_code: code, error_message: message } };
+    throw err;
+  };
+  const client = { linkTokenCreate: reject('INVALID_API_KEYS', 'invalid client_id or secret provided') };
+  const deps = (env) => ({ store: new MemoryStore(), config: { ...config, plaid: { ...config.plaid, env } }, plaid: async () => client });
+  await assert.rejects(plaidLinkToken(deps('sandbox'), 'u1'), /Plaid rejected the keys for its sandbox environment.*Sandbox secret.*PLAID_ENV=production/);
+  await assert.rejects(plaidLinkToken(deps('production'), 'u1'), /its production environment.*Production secret.*PLAID_ENV=sandbox/);
+  client.linkTokenCreate = reject('UNAUTHORIZED_ENVIRONMENT', 'you are not authorized to create items for this environment');
+  await assert.rejects(plaidLinkToken(deps('production'), 'u1'), /doesn't have production access yet/);
+});
+
 test('Plaid: falls back to Transactions only when Liabilities is not enabled', async () => {
   const client = fakePlaid({ pages: {}, failWith: 'no-liabilities' });
   const token = await plaidLinkToken({ store: new MemoryStore(), config, plaid: async () => client }, 'u1');

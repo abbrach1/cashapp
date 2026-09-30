@@ -76,7 +76,8 @@ You need three free accounts: Firebase, Vercel and Plaid (or SimpleFIN instead o
    | `FIREBASE_PROJECT_ID` | Optional: read from the service-account key when not set |
    | `TOKEN_ENCRYPTION_KEY` | A long random string (`openssl rand -base64 32`); encrypts bank tokens |
    | `CRON_SECRET` | Another long random string; protects the daily sync |
-   | `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV=production` | From Plaid (skip if you only use SimpleFIN/CSV) |
+   | `PLAID_CLIENT_ID`, `PLAID_SECRET` | From Plaid → Developers → Keys; use the **Production** secret (skip if you only use SimpleFIN/CSV) |
+   | `PLAID_ENV` | Optional: `production` (default) or `sandbox`. It must match the secret you copied |
 
 3. Click **Deploy**.
 4. In Firebase, go to **Authentication → Settings → Authorized domains** and add your Vercel domain (e.g. `your-app.vercel.app`) and any custom domain.
@@ -185,6 +186,7 @@ Everything lives under `users/{uid}`: `accounts`, `bills`, `reimbursements`, `ru
 - **The sign-in page lists "Setup needed" items:** add the missing environment variables in Vercel and redeploy.
 - **Google sign-in fails with `auth/unauthorized-domain`:** add your Vercel domain under Firebase → Authentication → Settings → Authorized domains.
 - **"… is not allowed to use this app":** add that email to `ALLOWED_EMAILS` and redeploy.
+- **"Plaid: invalid client_id or secret provided":** Plaid has a separate secret for Sandbox and Production. `PLAID_SECRET` must be the one matching `PLAID_ENV` (production by default). Fix it in Vercel, then redeploy.
 - **Chase is missing in Plaid, or OAuth fails:** finish Plaid's onboarding for your plan. To connect from a phone, set `PLAID_REDIRECT_URI` as described above.
 - **Transactions land in the wrong statement:** set the correct closing day on **Accounts**, or change one statement's closing date under **Statement details** (the next statement adjusts).
 - **A personal Zelle shows up as a reimbursement:** set **Only from these senders** in Settings, or mark it **Not a reimbursement**.

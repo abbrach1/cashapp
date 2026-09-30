@@ -49,6 +49,35 @@ export function plaidError(err) {
   return { code: 'NETWORK_ERROR', message: err?.message || 'Could not reach Plaid', needsReauth: false };
 }
 
+/**
+ * A message that says what to change, for the mistakes people actually make
+ * when setting up Plaid keys.
+ * @param {unknown} err
+ * @param {'sandbox'|'production'} env
+ */
+export function explainPlaidError(err, env) {
+  const e = plaidError(err);
+  const secretName = env === 'production' ? 'Production' : 'Sandbox';
+  const other = env === 'production' ? 'sandbox' : 'production';
+  if (e.code === 'INVALID_API_KEYS') {
+    return (
+      `Plaid rejected the keys for its ${env} environment. Plaid gives a different secret for Sandbox and Production: ` +
+      `set PLAID_SECRET to the ${secretName} secret from dashboard.plaid.com → Developers → Keys ` +
+      `(or set PLAID_ENV=${other} if that is the secret you copied), then redeploy.`
+    );
+  }
+  if (e.code === 'UNAUTHORIZED_ENVIRONMENT' || e.code === 'INVALID_ENVIRONMENT') {
+    return (
+      `Your Plaid account doesn't have ${env} access yet. Finish the onboarding for the free Trial plan at dashboard.plaid.com ` +
+      `(or set PLAID_ENV=sandbox to try Plaid's test banks), then redeploy.`
+    );
+  }
+  if (e.code === 'INVALID_PRODUCT' && /transactions/i.test(e.message)) {
+    return 'Your Plaid account is not enabled for Transactions yet. Request it in the Plaid Dashboard (it is included in the Trial plan).';
+  }
+  return e.message;
+}
+
 const toCents = (n) => (n === null || n === undefined ? null : Math.round(Number(n) * 100));
 
 /**

@@ -9,7 +9,7 @@ import { todayISO } from '../lib/dates.js';
 import { ingest } from './ingest.js';
 import { reconcile } from './reconcile.js';
 import { UserError } from './errors.js';
-import { createLinkToken, exchangePublicToken, fetchPlaidBatch, plaidError, removeItem } from '../providers/plaid.js';
+import { createLinkToken, exchangePublicToken, explainPlaidError, fetchPlaidBatch, plaidError, removeItem } from '../providers/plaid.js';
 import { claimSetupToken, fetchSimplefinBatch } from '../providers/simplefin.js';
 
 /**
@@ -59,7 +59,10 @@ export async function syncConnection(deps, uid, connectionId, opts = {}) {
       throw new UserError(`Unknown connection type ${conn.provider}`);
     }
   } catch (err) {
-    const info = conn.provider === 'plaid' && err?.response ? plaidError(err) : { message: err.message, needsReauth: Boolean(err.needsReauth) };
+    const info =
+      conn.provider === 'plaid' && err?.response
+        ? { ...plaidError(err), message: explainPlaidError(err, deps.config.plaid.env) }
+        : { message: err.message, needsReauth: Boolean(err.needsReauth) };
     await deps.store.mutate(uid, (uow) => {
       if (!uow.get('connections', connectionId)) return;
       uow.patch('connections', connectionId, {
@@ -131,7 +134,7 @@ export async function plaidLinkToken(deps, uid, connectionId = null) {
   try {
     return await createLinkToken(client, { config: deps.config, uid, accessToken });
   } catch (err) {
-    throw new UserError(`Plaid: ${plaidError(err).message}`, 502);
+    throw new UserError(`Plaid: ${explainPlaidError(err, deps.config.plaid.env)}`, 502);
   }
 }
 
@@ -147,7 +150,7 @@ export async function connectPlaid(deps, uid, { publicToken, institution }) {
   try {
     exchanged = await exchangePublicToken(client, publicToken);
   } catch (err) {
-    throw new UserError(`Plaid: ${plaidError(err).message}`, 502);
+    throw new UserError(`Plaid: ${explainPlaidError(err, deps.config.plaid.env)}`, 502);
   }
   const { result: connectionId } = await deps.store.mutate(uid, (uow) => {
     const existing = uow.list('connections').find((c) => c.provider === 'plaid' && c.itemId === exchanged.itemId);
