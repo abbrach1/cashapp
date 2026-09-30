@@ -1,8 +1,9 @@
 import { html, useState } from '../../vendor/preact.js';
-import { longDate, money, period, plural, shortDate } from '../format.js';
+import { post } from '../api.js';
+import { daysBetween, longDate, money, period, plural, shortDate } from '../format.js';
 import { navigate } from '../router.js';
-import { useStore } from '../store.js';
-import { Money, Tile, Empty } from '../ui.js';
+import { attempt, refresh, useStore } from '../store.js';
+import { AsyncButton, Money, Tile, Empty } from '../ui.js';
 import { BillsTable } from '../components/bills.js';
 import { AllocationDialog } from '../components/dialogs.js';
 import { ConnectOptions } from './accounts.js';
@@ -56,10 +57,41 @@ function Attention({ state }) {
     </li>`);
   }
   if (!items.length) return null;
+  const MAX = 6;
+  const shown = items.length > MAX ? items.slice(0, MAX - 1) : items;
   return html`<div class="card">
     <div class="card-head"><h2>Needs your attention</h2><span class="muted small">${plural(items.length, 'item')}</span></div>
-    <ul class="list">${items}</ul>
+    <ul class="list">
+      ${shown}
+      ${items.length > MAX
+        ? html`<li key="more"><span class="grow small muted">and ${items.length - shown.length} more</span><a class="btn sm" href="#/bills?filter=owed">See all statements</a></li>`
+        : null}
+    </ul>
     <${AllocationDialog} open=${Boolean(allocating)} reimbursement=${allocating} onClose=${() => setAllocating(null)} />
+  </div>`;
+}
+
+/** First day of the month before today's month: covers the last closed statement or two. */
+function suggestedStart(today) {
+  const [y, m] = today.split('-').map(Number);
+  const prev = m === 1 ? [y - 1, 12] : [y, m - 1];
+  return `${prev[0]}-${String(prev[1]).padStart(2, '0')}-01`;
+}
+
+/** Shown when old history (e.g. a year pulled from the bank) counts as owed. */
+function TrackingStartPrompt({ state }) {
+  if (state.settings.trackingStartDate) return null;
+  const old = state.bills.filter((b) => !b.isOpen && b.outstandingCents > 0 && daysBetween(b.end, state.today) > 75);
+  if (old.length < 2) return null;
+  const start = suggestedStart(state.today);
+  const setStart = () =>
+    attempt(async () => refresh((await post('/settings', { trackingStartDate: start })).state), `Tracking statements from ${longDate(start)}.`);
+  return html`<div class="callout warn row wrap">
+    <span class="grow">
+      <b>${plural(old.length, 'older statement')}</b> (${money(old.reduce((s, b) => s + b.outstandingCents, 0))}) count as owed because past history was imported.
+      Already reimbursed for those? Start tracking from recent statements — you can change it any time in Settings.
+    </span>
+    <${AsyncButton} class="btn sm primary" onClick=${setStart}>Track from ${longDate(start)}<//>
   </div>`;
 }
 
@@ -90,6 +122,8 @@ export function OverviewPage() {
         <p class="muted">${state.settings.trackingStartDate ? `Tracking statements closing since ${longDate(state.settings.trackingStartDate)}` : 'Tracking all statements'}</p>
       </div>
     </div>
+
+    <${TrackingStartPrompt} state=${state} />
 
     <div class="tiles">
       <${Tile} accent label="Owed to you" value=${money(d.owedCents)} sub=${`${plural(outstandingBills.length, 'statement')} not fully reimbursed`} onClick=${() => navigate('/bills?filter=owed')} />
