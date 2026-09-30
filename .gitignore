@@ -1,0 +1,13 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.vercel/
+*.log
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+.firebaserc
+service-account*.json
+*-firebase-adminsdk-*.json
+.DS_Store

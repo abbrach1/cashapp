@@ -1,0 +1,12 @@
+rules_version = '2';
+
+// The app talks to Firestore only through its own server (Admin SDK), which
+// bypasses these rules. Browsers get no direct access at all, so bank tokens
+// and financial data can never be read with the public web API key.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "reimbursement-tracker",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "express": "^5.2.1",
+    "firebase-admin": "^14.5.0",
+    "pdfkit": "^0.20.2",
+    "plaid": "^47.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "firebase": "^12.19.0",
+    "htm": "^3.1.1",
+    "preact": "^10.29.8"
+  },
+  "scripts": {
+    "demo": "node scripts/dev.js --demo",
+    "dev": "node scripts/dev.js",
+    "test": "node --test \"test/**/*.test.js\"",
+    "test:firestore": "firebase emulators:exec --only firestore --project demo-reimbursements \"node --test test/firestore.emulator.test.js\"",
+    "vendor": "node scripts/build-vendor.js"
+  }
+}

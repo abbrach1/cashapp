@@ -1,0 +1,126 @@
+import { html, useEffect, useState } from '../../vendor/preact.js';
+import { del, download, post } from '../api.js';
+import { attempt, refresh, useStore } from '../store.js';
+import { AsyncButton, Field } from '../ui.js';
+import { RuleDialog } from '../components/dialogs.js';
+import { signOut } from '../auth.js';
+
+const listText = (list) => (list ?? []).join(', ');
+
+export function SettingsPage() {
+  const { state, config, user } = useStore();
+  const s = state.settings;
+  const [form, setForm] = useState(null);
+  const [ruleOpen, setRuleOpen] = useState(false);
+
+  useEffect(() => {
+    setForm({
+      yourName: s.yourName,
+      yourEmail: s.yourEmail,
+      companyName: s.companyName,
+      companyEmail: s.companyEmail,
+      zelleHandle: s.zelleHandle,
+      reportTitle: s.reportTitle,
+      reimbursementKeywords: listText(s.reimbursementKeywords),
+      senderFilters: listText(s.senderFilters),
+      trackingStartDate: s.trackingStartDate ?? '',
+      excludeFeesByDefault: s.excludeFeesByDefault,
+      excludeRewardsByDefault: s.excludeRewardsByDefault,
+      autoMatch: s.autoMatch,
+    });
+  }, [state.settings]);
+
+  if (!form) return null;
+  const set = (k) => (e) => setForm({ ...form, [k]: e.currentTarget.type === 'checkbox' ? e.currentTarget.checked : e.currentTarget.value });
+  const save = (keys, msg = 'Settings saved.') =>
+    attempt(async () => {
+      const body = Object.fromEntries(keys.map((k) => [k, form[k]]));
+      if ('trackingStartDate' in body) body.trackingStartDate = body.trackingStartDate || null;
+      refresh((await post('/settings', body)).state);
+    }, msg);
+  const accountLabel = (id) => state.accounts.find((a) => a.id === id)?.label ?? 'All cards';
+
+  return html`<div class="stack-lg">
+    <div class="page-head"><div><h1>Settings</h1></div></div>
+
+    <div class="card">
+      <div class="card-head"><h2>You and your company</h2><span class="small muted">Printed on the reports you send</span></div>
+      <div class="card-body stack">
+        <div class="form-grid">
+          <${Field} label="Your name"><input value=${form.yourName} onInput=${set('yourName')} /><//>
+          <${Field} label="Your email"><input type="email" value=${form.yourEmail} onInput=${set('yourEmail')} /><//>
+          <${Field} label="Company"><input value=${form.companyName} onInput=${set('companyName')} /><//>
+          <${Field} label="Company expenses email" hint=${'Used by the “Email report” button'}><input type="email" value=${form.companyEmail} onInput=${set('companyEmail')} /><//>
+          <${Field} label="Your Zelle email or phone" hint="Shown on the report so they know where to pay"><input value=${form.zelleHandle} onInput=${set('zelleHandle')} /><//>
+          <${Field} label="Report title"><input value=${form.reportTitle} onInput=${set('reportTitle')} /><//>
+        </div>
+        <div><${AsyncButton} class="btn primary" onClick=${() => save(['yourName', 'yourEmail', 'companyName', 'companyEmail', 'zelleHandle', 'reportTitle'])}>Save<//></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>What gets claimed</h2></div>
+      <div class="card-body stack">
+        <p class="small muted" style="margin:0">Every charge on an expense card is claimed unless you switch it off. Card payments are never claimed. Refunds reduce the claim.</p>
+        <label class="check"><input type="checkbox" checked=${form.excludeFeesByDefault} onChange=${set('excludeFeesByDefault')} />
+          <span>Leave out card fees and interest (annual fee, late fee, foreign transaction fee, interest)<div class="small muted">You can still include one by switching it on.</div></span></label>
+        <label class="check"><input type="checkbox" checked=${form.excludeRewardsByDefault} onChange=${set('excludeRewardsByDefault')} />
+          <span>Leave out rewards redemptions (points/cash-back statement credits)<div class="small muted">Otherwise they would reduce what you claim.</div></span></label>
+        <${Field} label="Track statements closing on or after" hint="Older statements are hidden and not counted as owed.">
+          <input type="date" value=${form.trackingStartDate} onInput=${set('trackingStartDate')} style="max-width:200px" />
+        <//>
+        <div><${AsyncButton} class="btn primary" onClick=${() => save(['excludeFeesByDefault', 'excludeRewardsByDefault', 'trackingStartDate'])}>Save<//></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Always exclude</h2><button class="btn sm" onClick=${() => setRuleOpen(true)}>+ Add rule</button></div>
+      ${state.rules.length
+        ? html`<ul class="list">
+            ${state.rules.map(
+              (r) => html`<li key=${r.id}>
+                <div class="grow"><div class="merchant">Description contains "${r.pattern}"</div><div class="sub-desc">${accountLabel(r.accountId)}${r.note ? ` · ${r.note}` : ''}</div></div>
+                <${AsyncButton} class="btn sm ghost" onClick=${() => attempt(async () => refresh((await del(`/rules/${r.id}`)).state), 'Rule removed.')}>Remove<//>
+              </li>`,
+            )}
+          </ul>`
+        : html`<div class="card-body small muted">No rules. Add one for recurring personal charges on a work card (e.g. "NETFLIX").</div>`}
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Finding reimbursements</h2></div>
+      <div class="card-body stack">
+        <div class="form-grid">
+          <${Field} label="Deposit description contains" hint=${'Comma separated. Chase labels Zelle deposits “Zelle Payment From …” (older exports: “QUICKPAY”).'}>
+            <input value=${form.reimbursementKeywords} onInput=${set('reimbursementKeywords')} />
+          <//>
+          <${Field} label="Only from these senders" hint="Comma separated, e.g. your company name as it appears in Zelle. Empty = anyone.">
+            <input value=${form.senderFilters} placeholder="Acme Corp" onInput=${set('senderFilters')} />
+          <//>
+        </div>
+        <label class="check"><input type="checkbox" checked=${form.autoMatch} onChange=${set('autoMatch')} />
+          <span>Match payments to statements automatically when the amount fits exactly</span></label>
+        <div><${AsyncButton} class="btn primary" onClick=${() => save(['reimbursementKeywords', 'senderFilters', 'autoMatch'])}>Save<//></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Data</h2></div>
+      <div class="card-body stack">
+        <div class="row wrap">
+          <${AsyncButton} class="btn" onClick=${() => attempt(() => download('/export/ledger?format=xlsx'))}>Download everything (Excel)<//>
+          <${AsyncButton} class="btn" onClick=${() => attempt(() => download('/export/ledger?format=csv'))}>Statements summary (CSV)<//>
+        </div>
+        ${config?.demo
+          ? html`<div class="row wrap"><span class="small muted">Demo mode: data lives in memory only.</span>
+              <${AsyncButton} class="btn sm" onClick=${() => attempt(async () => refresh((await post('/demo/reset')).state), 'Demo data reset.')}>Reset demo data<//></div>`
+          : null}
+        ${user
+          ? html`<div class="row wrap"><span class="small muted">Signed in as <b>${user.email}</b></span><button class="btn sm" onClick=${() => signOut()}>Sign out</button></div>`
+          : null}
+      </div>
+    </div>
+
+    <${RuleDialog} open=${ruleOpen} onClose=${() => setRuleOpen(false)} />
+  </div>`;
+}
