@@ -1,5 +1,5 @@
 import { formatDateLong } from '../lib/dates.js';
-import { STATUS_LABELS, accountLabel } from './report.js';
+import { accountLabel, billStatusLabel } from './report.js';
 import { ledgerBills } from './csv.js';
 
 let excel;
@@ -201,7 +201,7 @@ export async function ledgerXLSX(snapshot, ledger) {
       claimed: dollars(b.claimCents),
       received: dollars(b.receivedCents),
       outstanding: dollars(b.outstandingCents),
-      status: STATUS_LABELS[b.status] ?? b.status,
+      status: billStatusLabel(b),
     });
     for (const k of ['start', 'end', 'due', 'paid', 'submitted']) row.getCell(k).numFmt = 'mm/dd/yyyy';
     for (const k of ['claimed', 'received', 'outstanding']) row.getCell(k).numFmt = MONEY;

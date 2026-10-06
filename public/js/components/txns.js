@@ -25,7 +25,7 @@ function ReasonBadge({ t, rulesById }) {
   return html`<span class=${cls} title=${title}>${label}</span>`;
 }
 
-function NoteInput({ t, onSave }) {
+export function NoteInput({ t, onSave }) {
   const [value, setValue] = useState(t.note ?? '');
   useEffect(() => setValue(t.note ?? ''), [t.note]);
   const commit = () => {
@@ -52,7 +52,7 @@ function NoteInput({ t, onSave }) {
 }
 
 /** Second line under the merchant, unless it just repeats the merchant. */
-function subLine(t) {
+export function subLine(t) {
   const title = (t.merchant ?? t.description ?? '').trim().toLowerCase();
   for (const candidate of [t.rawDescription, t.description]) {
     if (candidate && candidate.trim().toLowerCase() !== title) return candidate;

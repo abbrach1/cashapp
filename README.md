@@ -5,6 +5,7 @@ Track the work expenses you put on your own Chase credit cards, statement by sta
 - **Connects to Chase** through [Plaid](https://plaid.com) (free Trial plan) or [SimpleFIN Bridge](https://beta-bridge.simplefin.org) ($15/year), or by importing the CSV you download from chase.com.
 - **Groups transactions into bills** using each card's statement closing date.
 - **Everything is reimbursable by default.** Switch off a personal charge, claim only part of one, or add an "always exclude" rule (e.g. Netflix). Card fees, interest and rewards redemptions start out excluded (you can change that in Settings).
+- **Go back through your history** on the **Classify** page: statement by statement, mark what was business or personal (keyboard shortcuts included), apply a choice to every charge from the same merchant, and mark old statements you were already paid back for as reimbursed.
 - **Follows each bill**: statement closed → card paid (detected from your card payment) → sent to the company → reimbursed.
 - **Matches incoming Zelle payments** from your company to bills automatically, including one payment covering several bills. Partial payments are tracked until the rest arrives.
 - **Exports every bill**: a PDF, Excel or CSV report for your company (claimed items, business purpose, total, where to send the money) and a tracking workbook/CSV for your own records. You can also export everything at once.
@@ -94,7 +95,10 @@ You need three free accounts: Firebase, Vercel and Plaid (or SimpleFIN instead o
    - Enter your name, your company, the company's expenses email and your Zelle email or phone; these are printed on the reports.
    - Set **Only from these senders** to your company's name as it appears in Zelle, so a friend paying you back for dinner isn't counted.
    - Set **Track statements closing on or after** so old, already-settled statements don't count as owed.
-3. **Review each statement.** Everything is claimed. Switch off personal charges, use **⋯ → Claim part of it…** for a shared dinner, and type a business purpose next to anything that needs one. Use **⋯ → Always exclude "…"** for recurring personal merchants.
+3. **Classify.** Everything is claimed until you say otherwise. Open **Classify** to go through the transactions you haven't looked at yet, newest statement first: **Business**, **Personal** or **Split** (claim part of it), plus a business purpose where it helps. When the personal ones are marked, **✓ Confirm the rest** keeps everything else as business. Shortcuts: <kbd>J</kbd>/<kbd>K</kbd> move, <kbd>B</kbd> business, <kbd>P</kbd> personal, <kbd>S</kbd> split, <kbd>N</kbd> note. You can also switch charges on and off on each statement.
+   - **Right after connecting**, Chase sends the latest month first and the rest of the year a few minutes later; it appears on its own while the app is open.
+   - **⋯ → Business/Personal — all from …** applies a choice to every charge from that merchant in statements you haven't sent yet. **Always personal** creates a rule for the future too.
+   - **Old statements** you were already reimbursed for (before you used this app, or paid in a way the app can't see): use the statement's **⋯ → Already reimbursed** so it stops counting as owed. Switch to **All history** to go further back, including statements before your tracking start date.
 4. **After paying the card bill**, the statement shows **Ready to submit**. Click **Email report to company**: this downloads the PDF, opens a pre-written email to your company (attach the PDF) and asks whether to mark the statement as submitted.
 5. **When the Zelle arrives**, it's matched automatically if the amount equals one statement, or several together. Otherwise it appears under **Needs matching**, where you can apply the suggestion (oldest statements first) or split it yourself. A short payment leaves the statement **Partly reimbursed**, with the remainder still counted as owed.
 
@@ -112,7 +116,7 @@ You need three free accounts: Firebase, Vercel and Plaid (or SimpleFIN instead o
 
 ### Statement statuses
 
-**Current cycle** → **Not paid yet** → **Ready to submit** → **Submitted** → **Partly reimbursed** → **Reimbursed**. A statement where everything is personal shows **Nothing to claim**.
+**Current cycle** → **Not paid yet** → **Ready to submit** → **Submitted** → **Partly reimbursed** → **Reimbursed**. A statement where everything is personal shows **Nothing to claim**; one you marked as already reimbursed shows **Marked reimbursed**.
 
 ### Exports
 

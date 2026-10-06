@@ -4,7 +4,7 @@ import { longDate, money, plural, relativeTime, ROLE_LABEL } from '../format.js'
 import { attempt, refresh, useStore } from '../store.js';
 import { AsyncButton, Empty, Menu, Modal } from '../ui.js';
 import { ImportDialog, SimplefinDialog } from '../components/dialogs.js';
-import { connectWithPlaid, reconnectPlaid } from '../connect.js';
+import { connectWithPlaid, historyLoading, reconnectPlaid } from '../connect.js';
 
 export function ConnectOptions() {
   const { config } = useStore();
@@ -73,7 +73,9 @@ function ConnectionCard({ c, accounts }) {
       </div>
     </div>
     ${c.lastError ? html`<div class="card-body"><div class="callout danger small">${c.lastError}</div></div>` : null}
-    ${c.historyStatus === 'NOT_READY' ? html`<div class="card-body"><div class="callout small">Your bank is still preparing transaction history. It will appear after the next sync.</div></div>` : null}
+    ${historyLoading({ connections: [c] }).length
+      ? html`<div class="card-body"><div class="callout small row"><span class="spinner" aria-hidden="true"></span><span>${c.historyStatus === 'NOT_READY' ? 'Your bank is still preparing your transactions.' : 'Older transactions (up to a year) are still on their way.'} They appear automatically while this page is open.</span></div></div>`
+      : null}
     ${c.warnings?.length ? html`<div class="card-body"><div class="callout warn small">${c.warnings.join(' · ')}</div></div>` : null}
     <${Modal}
       open=${confirm}

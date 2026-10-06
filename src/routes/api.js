@@ -13,7 +13,8 @@ import { connectPlaid, connectSimplefin, disconnect, plaidLinkToken, syncAll, sy
 import { parseChaseCSV } from '../providers/chaseCsv.js';
 import { billReport } from '../exports/report.js';
 import { companyCSV, ledgerCSV, trackingCSV } from '../exports/csv.js';
-import { billDetailView, stateView, txnView } from '../views.js';
+import { billDetailView, classifyView, searchText, stateView, txnView } from '../views.js';
+import { merchantKey, statementOf } from '../core/review.js';
 import { seedDemo } from '../demo/seed.js';
 
 const ROLES = ['expenses', 'reimbursements', 'ignore'];
@@ -73,6 +74,20 @@ export function apiRouter(deps) {
     const want = override === 'claim';
     return defaultClaimed === want ? null : want ? 'include' : 'exclude';
   };
+  /**
+   * `reviewed` from the client (true/false), or undefined to leave it. Picking
+   * business/personal/split counts as reviewing, so callers pass true then.
+   */
+  const reviewedPatch = (txn, reviewed, now) => {
+    if (reviewed === undefined) return {};
+    if (reviewed) return txn.reviewedAt ? {} : { reviewedAt: now };
+    return txn.reviewedAt ? { reviewedAt: null } : {};
+  };
+  const optionalBool = (v, label) => {
+    if (v === undefined) return undefined;
+    if (typeof v !== 'boolean') throw new UserError(`${label} must be true or false`);
+    return v;
+  };
   const optionalDate = (v, label) => {
     if (v === null || v === '' || v === undefined) return null;
     if (!isISODate(v)) throw new UserError(`${label} must be a date (YYYY-MM-DD)`);
@@ -110,10 +125,7 @@ export function apiRouter(deps) {
       if (accountId && t.accountId !== accountId) continue;
       if (from && t.date < from) continue;
       if (to && t.date > to) continue;
-      if (q) {
-        const hay = `${t.description} ${t.merchant ?? ''} ${t.rawDescription ?? ''} ${t.note ?? ''} ${t.category ?? ''} ${(Math.abs(t.amountCents) / 100).toFixed(2)}`.toLowerCase();
-        if (!hay.includes(q)) continue;
-      }
+      if (q && !searchText(t).includes(q)) continue;
       const view = txnView(t, ledger);
       if (status && view.claim.status !== status) continue;
       total++;
@@ -122,34 +134,91 @@ export function apiRouter(deps) {
     res.json({ transactions: rows, total });
   });
 
+  // Card history grouped by statement, for going back and classifying it.
+  router.get('/classify', async (req, res) => {
+    const { snapshot, ledger } = await load(req.uid);
+    const str = (v) => (typeof v === 'string' && v ? v : null);
+    res.json(
+      classifyView(snapshot, ledger, {
+        show: str(req.query.show) ?? 'review',
+        scope: str(req.query.scope) ?? 'open',
+        accountId: str(req.query.accountId),
+        billId: str(req.query.billId),
+        q: str(req.query.q) ?? '',
+        limit: Math.min(Math.max(Number(req.query.limit) || 250, 20), 1000),
+        cursor: str(req.query.cursor),
+        summary: req.query.summary === '1',
+      }),
+    );
+  });
+
   // ---- transactions --------------------------------------------------------
 
+  /**
+   * Change many transactions at once: the listed `ids`, or every card
+   * transaction from the same merchant as `similarTo` (only in statements not
+   * sent or reimbursed yet, unless `scope` is "all"). Answers with the changed
+   * transactions.
+   */
   router.post('/transactions/bulk', async (req, res) => {
-    const { ids, override } = body(req);
-    if (!Array.isArray(ids) || !ids.length) throw new UserError('Select some transactions first');
-    if (![null, 'include', 'exclude', 'claim', 'unclaim'].includes(override ?? null)) throw new UserError('Unknown option');
-    const { result, state } = await change(req, (uow) => {
-      let changed = 0;
-      for (const id of ids.slice(0, 1000)) {
-        const t = uow.getTxn(id);
-        if (!t || t.kind === 'payment') continue;
-        const patch = sanitizeClaimChange(t, { override: resolveToggle(uow, t, override ?? null) });
-        if (patch.override === (t.override ?? null) && patch.claimCents === (t.claimCents ?? null)) continue;
-        uow.patchTxn(id, { ...patch, updatedAt: new Date().toISOString() });
-        changed++;
+    const input = body(req);
+    const { ids, similarTo } = input;
+    const hasOverride = 'override' in input;
+    const override = input.override ?? null;
+    if (hasOverride && ![null, 'include', 'exclude', 'claim', 'unclaim'].includes(override)) throw new UserError('Unknown option');
+    const reviewed = optionalBool(input.reviewed, 'reviewed');
+    if (!hasOverride && reviewed === undefined) throw new UserError('Nothing to change');
+    if (!similarTo && (!Array.isArray(ids) || !ids.length)) throw new UserError('Select some transactions first');
+    const { result, snapshot, ledger, state } = await change(req, (uow) => {
+      let targets;
+      if (similarTo) {
+        const ref = uow.getTxn(String(similarTo));
+        if (!ref) throw new NotFoundError('Transaction not found');
+        const key = merchantKey(ref);
+        const onCards = new Set(uow.list('accounts').filter((a) => a.role === 'expenses').map((a) => a.id));
+        targets = key ? [...uow.view.txns.values()].filter((t) => onCards.has(t.accountId) && merchantKey(t) === key) : [ref];
+        if (input.scope !== 'all') {
+          const current = buildLedger(uow.view, { today: today() });
+          targets = targets.filter((t) => t.id === ref.id || statementOf(t, uow.get('accounts', t.accountId), current).inPlay);
+        }
+      } else {
+        targets = ids.slice(0, 2000).map((id) => uow.getTxn(String(id))).filter(Boolean);
+      }
+      const now = new Date().toISOString();
+      const changed = [];
+      for (const t of targets) {
+        if (t.kind === 'payment') continue;
+        const patch = {};
+        if (hasOverride) {
+          const claim = sanitizeClaimChange(t, { override: resolveToggle(uow, t, override) });
+          if (claim.override !== (t.override ?? null) || claim.claimCents !== (t.claimCents ?? null)) Object.assign(patch, claim, { updatedAt: now });
+        }
+        Object.assign(patch, reviewedPatch(t, reviewed ?? (hasOverride ? true : undefined), now));
+        if (!Object.keys(patch).length) continue;
+        uow.patchTxn(t.id, patch);
+        changed.push(t.id);
       }
       return changed;
     });
-    res.json({ ok: true, changed: result, state });
+    const transactions = result
+      .slice(0, 2000)
+      .map((id) => snapshot.txns.get(id))
+      .filter(Boolean)
+      .map((t) => txnView(t, ledger));
+    res.json({ ok: true, changed: result.length, transactions, state });
   });
 
   router.post('/transactions/:id', async (req, res) => {
-    const input = body(req);
+    const { reviewed: rawReviewed, ...input } = body(req);
+    const reviewed = optionalBool(rawReviewed, 'reviewed');
     const { snapshot, ledger, state } = await change(req, (uow) => {
       const t = uow.getTxn(req.params.id);
       if (!t) throw new NotFoundError('Transaction not found');
       const patch = sanitizeClaimChange(t, 'override' in input ? { ...input, override: resolveToggle(uow, t, input.override) } : input);
-      if (Object.keys(patch).length) uow.patchTxn(t.id, { ...patch, updatedAt: new Date().toISOString() });
+      const now = new Date().toISOString();
+      if (Object.keys(patch).length) patch.updatedAt = now;
+      Object.assign(patch, reviewedPatch(t, reviewed ?? ('override' in input ? true : undefined), now));
+      if (Object.keys(patch).length) uow.patchTxn(t.id, patch);
     });
     const t = snapshot.txns.get(req.params.id);
     const billId = ledger.txnBill.get(t.id);
@@ -165,6 +234,10 @@ export function apiRouter(deps) {
       if (!bill) throw new NotFoundError('Bill not found');
       const patch = {};
       if ('submittedOn' in input) patch.submittedOn = optionalDate(input.submittedOn, 'Submitted date');
+      if ('settledOn' in input) {
+        patch.settledOn = optionalDate(input.settledOn, 'Reimbursed date');
+        if (patch.settledOn && bill.end >= today()) throw new UserError('This statement has not closed yet');
+      }
       if ('paidState' in input) {
         if (![null, 'paid', 'unpaid'].includes(input.paidState)) throw new UserError('Unknown paid option');
         patch.paidState = input.paidState;

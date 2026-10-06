@@ -1,6 +1,7 @@
 // Shapes sent to the browser.
 
 import { accountLabel } from './exports/report.js';
+import { classifiable, isReviewed, merchantKey, statementOf } from './core/review.js';
 
 export function connectionView(c) {
   return {
@@ -67,6 +68,8 @@ export function txnView(t, ledger) {
     override: t.override ?? null,
     claimOverrideCents: t.claimCents ?? null,
     note: t.note ?? null,
+    reviewed: isReviewed(t, c),
+    reviewedAt: t.reviewedAt ?? null,
     claim: c
       ? { applicable: c.applicable, claimCents: c.claimCents, status: c.status, reason: c.reason, ruleId: c.ruleId ?? null }
       : { applicable: false, claimCents: 0, status: 'n/a', reason: null, ruleId: null },
@@ -132,5 +135,148 @@ export function billDetailView(snapshot, ledger, billId) {
     payments,
     prevBillId: siblings[idx - 1]?.id ?? null,
     nextBillId: next?.id ?? null,
+  };
+}
+
+/** Text a search box matches against. */
+export function searchText(t) {
+  return `${t.description} ${t.merchant ?? ''} ${t.rawDescription ?? ''} ${t.note ?? ''} ${t.category ?? ''} ${(Math.abs(t.amountCents) / 100).toFixed(2)}`.toLowerCase();
+}
+
+const CLASSIFY_SHOW = {
+  review: (t, c) => !isReviewed(t, c),
+  all: () => true,
+  business: (_t, c) => c.claimCents !== 0,
+  personal: (_t, c) => c.claimCents === 0,
+};
+
+// Newest statement first; ties broken so the order (and the paging cursor) is stable.
+const groupOrder = (a, b) =>
+  a.end !== b.end ? (a.end < b.end ? 1 : -1) : a.accountId !== b.accountId ? (a.accountId < b.accountId ? -1 : 1) : a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
+
+const encodeCursor = (g) => Buffer.from(JSON.stringify([g.end, g.accountId, g.key])).toString('base64url');
+function decodeCursor(cursor) {
+  try {
+    const [end, accountId, key] = JSON.parse(Buffer.from(String(cursor), 'base64url').toString('utf8'));
+    return typeof end === 'string' && typeof accountId === 'string' && typeof key === 'string' ? { end, accountId, key } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Card history grouped by statement, for going back through it and marking
+ * what was personal. Pages hold about `limit` transactions (whole statements).
+ * @param {import('./store/model.js').Snapshot} snapshot
+ * @param {ReturnType<import('./core/ledger.js').buildLedger>} ledger
+ * @param {{
+ *   show?: string,              // review (not looked at yet) | all | business | personal
+ *   scope?: string,             // open: statements not sent or reimbursed yet | all: whole history
+ *   accountId?: string|null,
+ *   billId?: string|null,
+ *   q?: string,
+ *   limit?: number,
+ *   cursor?: string|null,
+ *   summary?: boolean,          // only totals and statement headers (every statement, any scope)
+ * }} [opts]
+ */
+export function classifyView(snapshot, ledger, opts = {}) {
+  const show = Object.hasOwn(CLASSIFY_SHOW, opts.show ?? '') ? opts.show : 'review';
+  const scope = opts.scope === 'all' || opts.billId ? 'all' : 'open';
+  const q = String(opts.q ?? '').trim().toLowerCase();
+  const limit = opts.limit ?? 250;
+
+  const items = [];
+  /** @type {Map<string, number>} same-merchant counts (what "all from …" would change) */
+  const similar = new Map();
+  for (const item of classifiable(snapshot, ledger)) {
+    const s = statementOf(item.txn, snapshot.accounts.get(item.txn.accountId), ledger);
+    const inScope = scope === 'all' || s.inPlay;
+    if (!inScope && !opts.summary) continue;
+    items.push({ ...item, s, inScope });
+    const key = merchantKey(item.txn);
+    if (key && inScope) similar.set(key, (similar.get(key) ?? 0) + 1);
+  }
+
+  const stats = { total: 0, reviewed: 0, claimCents: 0, amountCents: 0 };
+  /** @type {Map<string, any>} */
+  const groups = new Map();
+  for (const { txn: t, claim: c, s, inScope } of items) {
+    if (opts.accountId && t.accountId !== opts.accountId) continue;
+    if (opts.billId && s.billId !== opts.billId) continue;
+    const account = snapshot.accounts.get(t.accountId);
+    const reviewed = isReviewed(t, c);
+    if (inScope) {
+      stats.total++;
+      if (reviewed) stats.reviewed++;
+      stats.claimCents += c.claimCents;
+      stats.amountCents += t.amountCents;
+    }
+
+    let g = groups.get(s.key);
+    if (!g) {
+      const b = s.bill;
+      g = {
+        key: s.key,
+        billId: s.billId,
+        accountId: t.accountId,
+        accountLabel: accountLabel(account),
+        start: s.start,
+        end: s.end,
+        status: b?.status ?? null,
+        isOpen: b?.isOpen ?? false,
+        inPlay: s.inPlay,
+        tracked: b ? b.visible : s.inPlay,
+        submittedOn: b?.submittedOn ?? null,
+        settledOn: b?.settledOn ?? null,
+        receivedCents: b?.receivedCents ?? 0,
+        claimCents: 0,
+        amountCents: 0,
+        counts: { total: 0, reviewed: 0 },
+        txns: [],
+      };
+      groups.set(s.key, g);
+    }
+    g.claimCents += c.claimCents;
+    g.amountCents += t.amountCents;
+    g.counts.total++;
+    if (reviewed) g.counts.reviewed++;
+    if (!CLASSIFY_SHOW[show](t, c)) continue;
+    if (q && !searchText(t).includes(q)) continue;
+    g.txns.push(t);
+  }
+
+  if (opts.summary) {
+    return { show, scope, stats, groups: [...groups.values()].map(({ txns: _t, ...g }) => g) };
+  }
+
+  const ordered = [...groups.values()].filter((g) => g.txns.length).sort(groupOrder);
+  let i = 0;
+  if (opts.cursor) {
+    const after = decodeCursor(opts.cursor);
+    i = after ? ordered.findIndex((g) => groupOrder(g, after) > 0) : -1;
+    if (i < 0) i = ordered.length;
+  }
+  const page = [];
+  let count = 0;
+  for (; i < ordered.length && count < limit; i++) {
+    page.push(ordered[i]);
+    count += ordered[i].txns.length;
+  }
+  const rest = ordered.slice(i);
+
+  return {
+    show,
+    scope,
+    stats,
+    trackingStart: ledger.trackingStart ?? null,
+    groups: page.map(({ txns, ...g }) => ({
+      ...g,
+      transactions: txns
+        .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : 1))
+        .map((t) => ({ ...txnView(t, ledger), similarCount: similar.get(merchantKey(t)) ?? 1 })),
+    })),
+    nextCursor: rest.length ? encodeCursor(page[page.length - 1]) : null,
+    more: { statements: rest.length, transactions: rest.reduce((n, g) => n + g.txns.length, 0) },
   };
 }

@@ -25,6 +25,18 @@ const MINUTE = 60_000;
 // SimpleFIN asks apps to stay under ~24 requests a day.
 const MIN_INTERVAL = { plaid: 2 * MINUTE, simplefin: 30 * MINUTE };
 
+const HISTORY_LOADING = new Set(['NOT_READY', 'INITIAL_UPDATE_COMPLETE']);
+
+/**
+ * Plaid sends the most recent month first and older history (up to a year)
+ * a little later; until then every chance to sync is worth taking. (Only for
+ * the first week, in case a bank never reports its history as complete.)
+ */
+export function historyIncomplete(conn, now = Date.now()) {
+  const age = conn.createdAt ? now - Date.parse(conn.createdAt) : 0;
+  return conn.provider === 'plaid' && conn.status !== 'reauth' && HISTORY_LOADING.has(conn.historyStatus) && age < 7 * 24 * 60 * MINUTE;
+}
+
 async function readSecret(deps, uid, connectionId) {
   const sealed = await deps.store.getSecret(uid, connectionId);
   if (!sealed) throw new UserError('Stored bank credentials are missing. Remove this connection and connect again.');
@@ -42,7 +54,7 @@ export async function syncConnection(deps, uid, connectionId, opts = {}) {
   const conn = snapshot.connections.get(connectionId);
   if (!conn) throw new UserError('Connection not found', 404);
   const last = conn.lastSyncedAt ? Date.parse(conn.lastSyncedAt) : 0;
-  const minGap = opts.staleMinutes !== undefined ? opts.staleMinutes * MINUTE : MIN_INTERVAL[conn.provider] ?? 0;
+  const minGap = opts.staleMinutes !== undefined && !historyIncomplete(conn) ? opts.staleMinutes * MINUTE : MIN_INTERVAL[conn.provider] ?? 0;
   if (!opts.force && Date.now() - last < minGap) return { connectionId, skipped: true };
 
   let batch;
@@ -96,7 +108,7 @@ export async function syncConnection(deps, uid, connectionId, opts = {}) {
     reconcile(uow, { today });
     return stats;
   });
-  return { connectionId, ok: true, ...result };
+  return { connectionId, ok: true, historyStatus: batch.historyStatus ?? null, ...result };
 }
 
 /**

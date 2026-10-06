@@ -34,6 +34,12 @@ export const STATUS_LABELS = {
   reimbursed: 'Reimbursed',
 };
 
+/** Bill status for exports; says when you marked it reimbursed yourself. */
+export function billStatusLabel(bill) {
+  if (bill.status === 'reimbursed' && bill.settledOn && bill.receivedCents < bill.claimCents) return 'Reimbursed (marked by you)';
+  return STATUS_LABELS[bill.status] ?? bill.status;
+}
+
 export function accountLabel(account) {
   if (!account) return 'Unknown account';
   const name = account.nickname || account.name;
@@ -107,7 +113,7 @@ export function billReport(snapshot, ledger, billId) {
       paid: bill.paid.paid,
       submittedOn: bill.submittedOn,
       status: bill.status,
-      statusLabel: STATUS_LABELS[bill.status] ?? bill.status,
+      statusLabel: billStatusLabel(bill),
       note: bill.note,
       stmtBalanceCents: bill.stmtBalanceCents,
     },

@@ -4,6 +4,7 @@ import { centsToInput, localToday, longDate, money, parseCents, period, plural, 
 import { attempt, refresh, useStore } from '../store.js';
 import { AsyncButton, Empty, Field, LoadingPage, Menu, Modal, Money, Pill, Tile } from '../ui.js';
 import { TxnTable } from '../components/txns.js';
+import { statusLabel } from '../components/bills.js';
 
 function Step({ n, title, done, current, sub, children }) {
   return html`<div class=${`step ${done ? 'done' : ''} ${current ? 'current' : ''}`}>
@@ -130,6 +131,7 @@ export function BillPage({ id }) {
   const today = state.today;
   const settings = state.settings;
   const posted = detail.transactions.filter((t) => !t.pending);
+  const unreviewedCount = posted.filter((t) => t.claim.applicable && !t.reviewed).length;
   const claimedCount = posted.filter((t) => t.claim.claimCents !== 0).length;
   const excludedCount = posted.length - claimedCount;
   const pdfPath = `/export/bills/${b.id}?format=pdf${includePersonal ? '&personal=1' : ''}`;
@@ -159,7 +161,7 @@ export function BillPage({ id }) {
       <div class="breadcrumb"><a href="#/bills">Statements</a> / ${b.accountLabel}</div>
       <div class="page-head" style="margin-bottom:0">
         <div>
-          <div class="row wrap"><h1>${period(b.start, b.end)}</h1><${Pill} status=${b.status} /></div>
+          <div class="row wrap"><h1>${period(b.start, b.end)}</h1><${Pill} status=${b.status} label=${statusLabel(b)} /></div>
           <p class="muted">
             ${b.isOpen ? `Current cycle — closes ${longDate(b.end)}` : `Closed ${longDate(b.end)}`}${b.dueDate ? ` · payment due ${longDate(b.dueDate)}` : ''}
           </p>
@@ -200,8 +202,24 @@ export function BillPage({ id }) {
           ${!b.submittedOn && b.claimCents > 0 && !b.isOpen ? html`<button class="btn sm" onClick=${() => patchBill({ submittedOn: localToday() }, 'Marked as submitted.')}>Mark sent</button>` : null}
           ${b.submittedOn ? html`<button class="btn sm ghost" onClick=${() => patchBill({ submittedOn: null }, 'Marked as not submitted.')}>Undo</button>` : null}
         <//>
-        <${Step} n="4" title="Reimbursed" done=${steps.reimbursed} current=${currentStep === 'reimbursed'} sub=${b.claimCents > 0 ? `${money(b.receivedCents)} of ${money(b.claimCents)} received` : 'Nothing to reimburse'}>
-          ${b.claimCents > b.receivedCents && steps.submitted ? html`<a class="btn sm" href="#/reimbursements">Match a payment</a>` : null}
+        <${Step}
+          n="4"
+          title="Reimbursed"
+          done=${steps.reimbursed}
+          current=${currentStep === 'reimbursed'}
+          sub=${b.settledOn
+            ? `Marked as reimbursed ${shortDate(b.settledOn, today)}${b.receivedCents ? ` · ${money(b.receivedCents)} matched` : ''}`
+            : b.claimCents > 0
+              ? `${money(b.receivedCents)} of ${money(b.claimCents)} received`
+              : 'Nothing to reimburse'}
+        >
+          ${b.claimCents > b.receivedCents && steps.submitted && !b.settledOn ? html`<a class="btn sm" href="#/reimbursements">Match a payment</a>` : null}
+          ${!b.isOpen && !b.settledOn && b.claimCents > b.receivedCents
+            ? html`<button class="btn sm ghost" title="For statements you were paid back for outside this app, e.g. before you started using it" onClick=${() => patchBill({ settledOn: localToday() }, 'Marked as already reimbursed.')}>
+                Already reimbursed
+              </button>`
+            : null}
+          ${b.settledOn ? html`<button class="btn sm ghost" onClick=${() => patchBill({ settledOn: null }, 'It counts as owed again.')}>Undo</button>` : null}
         <//>
       </div>
     </div>
@@ -240,7 +258,12 @@ export function BillPage({ id }) {
         onUpdated=${onUpdated}
         empty=${html`<${Empty} title=${detail.transactions.length ? 'No matches' : 'No transactions on this statement'}>${detail.transactions.length ? 'Try another filter.' : ''}<//>`}
       />
-      <div class="card-foot small muted">Switch off anything personal. Everything else on this card is claimed. Notes appear on the company report as the business purpose.</div>
+      <div class="card-foot small muted spread">
+        <span>Switch off anything personal. Everything else on this card is claimed. Notes appear on the company report as the business purpose.</span>
+        ${unreviewedCount && !b.submittedOn && !b.settledOn
+          ? html`<a class="nowrap" href=${`#/classify?bill=${b.id}`}>Review ${plural(unreviewedCount, 'transaction')} one by one →</a>`
+          : null}
+      </div>
     </div>
 
     <div class="grid-2">

@@ -1,7 +1,7 @@
 import { toCSV } from '../lib/csv.js';
 import { centsToDecimal } from '../lib/money.js';
 import { formatDateUS } from '../lib/dates.js';
-import { STATUS_LABELS, accountLabel } from './report.js';
+import { accountLabel, billStatusLabel } from './report.js';
 
 /**
  * CSV for the company: one row per claimed transaction and a total.
@@ -105,7 +105,7 @@ export function ledgerCSV(snapshot, ledger) {
       centsToDecimal(b.claimCents),
       centsToDecimal(b.receivedCents),
       centsToDecimal(b.outstandingCents),
-      STATUS_LABELS[b.status] ?? b.status,
+      billStatusLabel(b),
     ]);
   }
   return toCSV(rows, { bom: true });

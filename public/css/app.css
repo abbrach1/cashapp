@@ -1065,6 +1065,181 @@ dialog.modal::backdrop {
   color: var(--muted);
 }
 
+/* ---------- classify ---------- */
+
+button.link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+button.link:hover {
+  text-decoration: underline;
+}
+kbd {
+  display: inline-block;
+  min-width: 1.5em;
+  padding: 0 5px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  text-align: center;
+}
+.show-mobile-inline {
+  display: none;
+}
+.cl-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+.cl-group-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 16px;
+  flex-wrap: wrap;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.cl-group-head:last-child {
+  border-bottom: none;
+}
+.cl-title {
+  font-size: 1rem;
+}
+.cl-title a {
+  color: var(--text);
+}
+.cl-row {
+  display: grid;
+  grid-template-columns: 16px 58px minmax(0, 1fr) 96px auto minmax(140px, 220px) 32px;
+  grid-template-areas: 'dot date merchant amount seg note menu';
+  align-items: center;
+  gap: 4px 12px;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--border);
+  scroll-margin: 140px 0 90px;
+}
+.cl-row:last-child {
+  border-bottom: none;
+}
+.cl-row.focused {
+  background: var(--surface-2);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.cl-dot {
+  grid-area: dot;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ok);
+}
+.cl-row.is-new .cl-dot::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--info);
+}
+.cl-date {
+  grid-area: date;
+  color: var(--muted);
+}
+.cl-merchant {
+  grid-area: merchant;
+  min-width: 0;
+}
+.cl-merchant .merchant,
+.cl-merchant .sub-desc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-amount {
+  grid-area: amount;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.cl-row.personal .merchant,
+.cl-row.personal .cl-amount .money {
+  color: var(--muted);
+}
+.cl-row.personal .cl-amount .money {
+  text-decoration: line-through;
+}
+.cl-note {
+  grid-area: note;
+  min-width: 0;
+}
+.cl-note .note-input {
+  min-width: 0;
+}
+.cl-menu {
+  grid-area: menu;
+}
+.seg {
+  grid-area: seg;
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface);
+}
+.seg button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 4px 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.seg button + button {
+  border-left: 1px solid var(--border-strong);
+}
+.seg button:hover {
+  background: var(--neutral-weak);
+  color: var(--text);
+}
+/* Not reviewed: the default is shown, but only softly. */
+.cl-row.is-new .seg button.on {
+  background: var(--neutral-weak);
+  color: var(--text-2);
+}
+.cl-row.is-reviewed.business .seg button.on {
+  background: var(--ok-weak);
+  color: var(--ok);
+}
+.cl-row.is-reviewed.personal .seg button.on {
+  background: var(--warn-weak);
+  color: var(--warn);
+}
+.cl-row.is-reviewed.split .seg button.on {
+  background: var(--info-weak);
+  color: var(--info);
+}
+
+@media (max-width: 960px) {
+  .cl-row {
+    grid-template-columns: 16px 54px minmax(0, 1fr) auto auto 32px;
+    grid-template-areas:
+      'dot date merchant amount seg menu'
+      'dot date note note note note';
+  }
+}
+
 /* ---------- small screens ---------- */
 
 @media (max-width: 860px) {
@@ -1203,5 +1378,49 @@ dialog.modal::backdrop {
   table.txn-table td.c-menu {
     grid-area: menu;
     width: auto !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .show-mobile-inline {
+    display: inline;
+  }
+  .cl-group-head {
+    padding: 12px 14px;
+  }
+  .cl-group-head > .grow {
+    flex-basis: 100%;
+  }
+  .cl-toolbar select,
+  .cl-toolbar input[type='search'] {
+    flex: 1 1 100%;
+    max-width: none !important;
+  }
+  .cl-row {
+    grid-template-columns: 12px minmax(0, 1fr) auto 32px;
+    grid-template-areas:
+      'dot merchant amount menu'
+      'dot seg seg seg'
+      'dot note note note';
+    gap: 6px 10px;
+    padding: 10px 12px;
+  }
+  .cl-date {
+    display: none;
+  }
+  .cl-dot {
+    width: 12px;
+    align-self: start;
+    margin-top: 4px;
+  }
+  .seg {
+    display: flex;
+  }
+  .seg button {
+    flex: 1;
+    padding: 8px 6px;
+  }
+  .cl-note {
+    margin-left: -6px;
   }
 }

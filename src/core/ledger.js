@@ -5,6 +5,7 @@
 import { claimInfo } from './claims.js';
 import { dueDateAfter } from './bills.js';
 import { getSettings } from './settings.js';
+import { reviewProgress } from './review.js';
 
 const byDateThenId = (a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : 1);
 const byStart = (a, b) => (a.start < b.start ? -1 : 1);
@@ -139,6 +140,8 @@ function summarizeBill(bill, txns, { account, claims, allocationsByBill, today, 
     visible: !trackingStart || bill.end >= trackingStart,
     locked: Boolean(bill.locked),
     submittedOn: bill.submittedOn ?? null,
+    // You marked it as reimbursed (e.g. paid back before you used this app).
+    settledOn: bill.settledOn ?? null,
     note: bill.note ?? null,
     paidState: bill.paidState ?? null,
     manualPaidOn: bill.paidOn ?? null,
@@ -152,7 +155,7 @@ function summarizeBill(bill, txns, { account, claims, allocationsByBill, today, 
     paymentsInCents,
     pendingCents,
     receivedCents,
-    outstandingCents: claimCents - receivedCents,
+    outstandingCents: bill.settledOn ? 0 : claimCents - receivedCents,
     allocations,
   };
 }
@@ -256,7 +259,7 @@ function detectPayments(views, txns) {
 export function billStatus(v) {
   if (v.isOpen) return 'open';
   if (v.receivedCents === 0 && v.claimCents <= 0) return 'nothing';
-  if (v.receivedCents >= v.claimCents) return 'reimbursed';
+  if (v.settledOn || v.receivedCents >= v.claimCents) return 'reimbursed';
   if (v.receivedCents > 0) return 'partial';
   if (v.submittedOn) return 'submitted';
   if (v.paid.paid) return 'ready';
@@ -307,6 +310,10 @@ function buildDashboard(snapshot, ledger) {
     unmatchedCount: 0,
     unmatchedCents: 0,
     accountsNeedingSetup: [],
+    // Card transactions in statements not yet sent, and how many you haven't looked at.
+    reviewTotal: 0,
+    unreviewedCount: 0,
+    unreviewedClosedCount: 0,
   };
   for (const b of ledger.bills.values()) {
     if (!b.visible) continue;
@@ -333,5 +340,9 @@ function buildDashboard(snapshot, ledger) {
   for (const a of snapshot.accounts.values()) {
     if (a.role === 'expenses' && !a.closingDay) d.accountsNeedingSetup.push(a.id);
   }
+  const review = reviewProgress(snapshot, ledger);
+  d.reviewTotal = review.total;
+  d.unreviewedCount = review.unreviewed;
+  d.unreviewedClosedCount = review.unreviewedClosed;
   return d;
 }

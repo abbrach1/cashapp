@@ -12,6 +12,11 @@ export function billSub(b, today) {
   return '';
 }
 
+/** "Marked reimbursed" when you said so yourself rather than a payment covering it. */
+export function statusLabel(b) {
+  return b.status === 'reimbursed' && b.settledOn && b.receivedCents < b.claimCents ? 'Marked reimbursed' : undefined;
+}
+
 export function BillsTable({ bills, today, showCard = true, compact = false }) {
   return html`<div class="table-wrap">
     <table class="data stack-mobile">
@@ -40,7 +45,7 @@ export function BillsTable({ bills, today, showCard = true, compact = false }) {
                   ${b.claimCents > 0 && b.receivedCents > 0 ? html`<${Progress} value=${b.receivedCents} max=${b.claimCents} />` : null}
                 </td>`}
             <td class="amount" data-label="Still owed">${b.status === 'open' || b.status === 'nothing' ? html`<span class="muted">—</span>` : html`<${Money} cents=${Math.max(0, b.outstandingCents)} />`}</td>
-            <td><${Pill} status=${b.status} /></td>
+            <td><${Pill} status=${b.status} label=${statusLabel(b)} /></td>
           </tr>`,
         )}
       </tbody>

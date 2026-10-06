@@ -2,10 +2,10 @@
 //
 // A bill covers [start, end] where `end` is the statement closing date. Bills
 // are generated from the card's closing day (e.g. the 14th of every month).
-// Bills you have touched (submitted, paid, notes, reimbursements, edited
-// closing date, or statement data from the bank) are fixed; the rest are
-// regenerated freely, so changing the closing day re-slices only untouched
-// history.
+// Bills you have touched (submitted, paid, marked reimbursed, notes,
+// reimbursements, edited closing date, or statement data from the bank) are
+// fixed; the rest are regenerated freely, so changing the closing day
+// re-slices only untouched history.
 
 import { newId } from '../lib/ids.js';
 import { addDays, clampedDate, diffDays, maxDate, parseISO, shiftMonth } from '../lib/dates.js';
@@ -58,6 +58,7 @@ export function isFixedBill(bill, allocatedBillIds) {
   return Boolean(
     bill.locked ||
       bill.submittedOn ||
+      bill.settledOn ||
       bill.paidState ||
       bill.note ||
       bill.dueDate ||

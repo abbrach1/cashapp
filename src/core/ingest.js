@@ -6,7 +6,7 @@ import { hashId, newId } from '../lib/ids.js';
 import { diffDays } from '../lib/dates.js';
 import { classify } from './classify.js';
 
-const USER_FIELDS = ['override', 'claimCents', 'note'];
+const USER_FIELDS = ['override', 'claimCents', 'note', 'reviewedAt'];
 
 /**
  * @typedef {{
@@ -69,10 +69,12 @@ export function transferUserData(uow, fromTxn, toTxn) {
   if (current && !hasUserData(current) && hasUserData(fromTxn)) {
     const patch = {};
     for (const f of USER_FIELDS) patch[f] = fromTxn[f] ?? null;
-    // A partial claim only makes sense if the amount did not change.
+    // A partial claim only makes sense if the amount did not change: fall back
+    // to the default and ask again.
     if (patch.override === 'partial' && fromTxn.amountCents !== current.amountCents) {
       patch.override = null;
       patch.claimCents = null;
+      patch.reviewedAt = null;
     }
     uow.patchTxn(toTxn.id, patch);
   }

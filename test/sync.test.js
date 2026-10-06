@@ -299,3 +299,32 @@ test('SimpleFIN: revoked access asks to reconnect', async () => {
   assert.equal(res.needsReauth, true);
   assert.equal((await store.load('u1')).connections.get(connectionId).status, 'reauth');
 });
+
+test('Plaid: while older history is still coming, opening the app syncs again', async () => {
+  const store = new MemoryStore();
+  const client = fakePlaid({
+    pages: {
+      start: { added: [plaidTxn('t1', 'card1', daysAgo(3), 20, 'Uber')], modified: [], removed: [], next_cursor: 'c1', has_more: false, transactions_update_status: 'INITIAL_UPDATE_COMPLETE' },
+      c1: { added: [plaidTxn('old1', 'card1', daysAgo(200), 300, 'Delta')], modified: [], removed: [], next_cursor: 'c2', has_more: false },
+      c2: { added: [], modified: [], removed: [], next_cursor: 'c2', has_more: false },
+    },
+  });
+  const deps = { store, config, plaid: async () => client };
+  const { connectionId, sync } = await connectPlaid(deps, 'u1', { publicToken: 'p', institution: { name: 'Chase' } });
+  assert.equal(sync.historyStatus, 'INITIAL_UPDATE_COMPLETE');
+  const backdate = (minutes) =>
+    store.mutate('u1', (uow) => uow.patch('connections', connectionId, { lastSyncedAt: new Date(Date.now() - minutes * 60_000).toISOString() }));
+
+  // Synced 5 minutes ago: normally too recent (the app waits 4 hours)...
+  await backdate(5);
+  const again = await syncConnection(deps, 'u1', connectionId, { staleMinutes: 240 });
+  // ...but history isn't complete, so it goes ahead and gets the older transactions.
+  assert.equal(again.ok, true);
+  assert.equal(again.added, 1);
+  assert.equal(again.historyStatus, 'HISTORICAL_UPDATE_COMPLETE');
+  assert.equal((await store.load('u1')).connections.get(connectionId).historyStatus, 'HISTORICAL_UPDATE_COMPLETE');
+
+  // Complete now: back to the normal pace.
+  await backdate(5);
+  assert.equal((await syncConnection(deps, 'u1', connectionId, { staleMinutes: 240 })).skipped, true);
+});

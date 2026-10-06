@@ -7,7 +7,7 @@ import { AsyncButton, Money, Tile, Empty } from '../ui.js';
 import { BillsTable } from '../components/bills.js';
 import { AllocationDialog } from '../components/dialogs.js';
 import { ConnectOptions } from './accounts.js';
-import { reconnectPlaid } from '../connect.js';
+import { historyLoading, reconnectPlaid } from '../connect.js';
 
 function Attention({ state }) {
   const [allocating, setAllocating] = useState(null);
@@ -33,6 +33,14 @@ function Attention({ state }) {
     </li>`);
   }
   const visible = state.bills.filter((b) => b.visible);
+  const toReview = state.dashboard.unreviewedClosedCount ?? 0;
+  if (toReview) {
+    items.push(html`<li key="classify">
+      <div class="icon-dot setup">✎</div>
+      <div class="grow"><div class="merchant">Classify ${plural(toReview, 'transaction')} on closed statements</div><div class="sub-desc">Mark anything personal before you send them. Everything else counts as business.</div></div>
+      <a class="btn sm primary" href="#/classify">Classify</a>
+    </li>`);
+  }
   for (const b of visible.filter((x) => x.status === 'ready').reverse()) {
     items.push(html`<li key=${`r-${b.id}`}>
       <div class="icon-dot ready">↗</div>
@@ -89,9 +97,10 @@ function TrackingStartPrompt({ state }) {
   return html`<div class="callout warn row wrap">
     <span class="grow">
       <b>${plural(old.length, 'older statement')}</b> (${money(old.reduce((s, b) => s + b.outstandingCents, 0))}) count as owed because past history was imported.
-      Already reimbursed for those? Start tracking from recent statements — you can change it any time in Settings.
+      Go through them to mark personal items and the ones you were already paid back for — or only track recent statements (you can change it any time in Settings).
     </span>
-    <${AsyncButton} class="btn sm primary" onClick=${setStart}>Track from ${longDate(start)}<//>
+    <a class="btn sm primary" href="#/classify">Classify history</a>
+    <${AsyncButton} class="btn sm" onClick=${setStart}>Track from ${longDate(start)}<//>
   </div>`;
 }
 
@@ -123,6 +132,9 @@ export function OverviewPage() {
       </div>
     </div>
 
+    ${historyLoading(state).length
+      ? html`<div class="callout small row"><span class="spinner" aria-hidden="true"></span><span>Your bank is still sending older transactions. Totals will update as they arrive.</span></div>`
+      : null}
     <${TrackingStartPrompt} state=${state} />
 
     <div class="tiles">

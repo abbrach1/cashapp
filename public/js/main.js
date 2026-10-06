@@ -4,19 +4,21 @@ import { relativeTime } from './format.js';
 import { useRoute } from './router.js';
 import { getStore, refresh, setStore, useStore } from './store.js';
 import { AsyncButton, LoadingPage, Toasts } from './ui.js';
-import { isStale, resumeOAuthIfNeeded, syncNow } from './connect.js';
+import { historyLoading, isStale, resumeOAuthIfNeeded, syncNow, watchHistory } from './connect.js';
 import { SetupStatus } from './components/setup.js';
 import { OverviewPage } from './pages/overview.js';
 import { BillsPage } from './pages/bills.js';
 import { BillPage } from './pages/bill.js';
 import { ReimbursementsPage } from './pages/reimbursements.js';
 import { TransactionsPage } from './pages/transactions.js';
+import { ClassifyPage } from './pages/classify.js';
 import { AccountsPage } from './pages/accounts.js';
 import { SettingsPage } from './pages/settings.js';
 
 const NAV = [
   ['/', 'Overview'],
   ['/bills', 'Statements'],
+  ['/classify', 'Classify'],
   ['/reimbursements', 'Reimbursements'],
   ['/transactions', 'Transactions'],
   ['/accounts', 'Accounts'],
@@ -27,6 +29,7 @@ function TopBar({ route }) {
   const { state, syncing, config } = useStore();
   const unmatched = state?.dashboard?.unmatchedCount ?? 0;
   const ready = state?.dashboard?.readyCount ?? 0;
+  const unreviewed = state?.dashboard?.unreviewedCount ?? 0;
   const active = (path) => (path === '/' ? route.path === '/' : route.path.startsWith(path));
   return html`<header class="topbar">
     ${config?.demo ? html`<div class="demo-banner">Demo data — nothing here is real. Connect your own accounts by deploying the app (see README).</div>` : null}
@@ -35,7 +38,9 @@ function TopBar({ route }) {
       <nav class="nav">
         ${NAV.map(
           ([path, label]) => html`<a href=${`#${path}`} class=${active(path) ? 'active' : ''}>
-            ${label}${path === '/reimbursements' && unmatched ? html`<span class="count">${unmatched}</span>` : null}${path === '/bills' && ready ? html`<span class="count" style="background:var(--info)">${ready}</span>` : null}
+            ${label}${path === '/reimbursements' && unmatched ? html`<span class="count">${unmatched}</span>` : null}${path === '/bills' && ready ? html`<span class="count" style="background:var(--info)">${ready}</span>` : null}${path === '/classify' && unreviewed
+              ? html`<span class="count" style="background:var(--muted)" title=${`${unreviewed} not reviewed yet`}>${unreviewed > 99 ? '99+' : unreviewed}</span>`
+              : null}
           </a>`,
         )}
       </nav>
@@ -57,6 +62,7 @@ function Page({ route }) {
   if (section === 'bills') return html`<${BillsPage} query=${route.query} />`;
   if (section === 'reimbursements') return html`<${ReimbursementsPage} />`;
   if (section === 'transactions') return html`<${TransactionsPage} />`;
+  if (section === 'classify') return html`<${ClassifyPage} key=${route.query.toString()} query=${route.query} />`;
   if (section === 'accounts') return html`<${AccountsPage} />`;
   if (section === 'settings') return html`<${SettingsPage} />`;
   return html`<div class="empty"><h3>Page not found</h3><a href="#/">Go to overview</a></div>`;
@@ -70,6 +76,7 @@ function App() {
       .then((s) => {
         resumeOAuthIfNeeded();
         if (isStale(s)) syncNow({ auto: true });
+        if (historyLoading(s).length) watchHistory();
       })
       .catch(() => {});
   }, []);

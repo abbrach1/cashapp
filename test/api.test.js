@@ -251,3 +251,81 @@ test('demo mode seeds data on first load', async (t) => {
   assert.equal(reset.status, 200);
   assert.equal(reset.body.state.bills.length, state.bills.length);
 });
+
+test('classify: review history, apply to the same merchant, mark statements already reimbursed', async (t) => {
+  const s = await serve();
+  t.after(s.close);
+  const csv = `Transaction Date,Post Date,Description,Category,Type,Amount,Memo
+07/20/2026,07/21/2026,UBER *TRIP,Travel,Sale,-30.00,
+07/22/2026,07/23/2026,DELTA AIR LINES,Travel,Sale,-300.00,
+08/19/2026,08/20/2026,DELTA AIR LINES,Travel,Sale,-450.00,
+08/21/2026,08/22/2026,NETFLIX.COM,Entertainment,Sale,-15.49,
+08/28/2026,08/29/2026,UBER *TRIP,Travel,Sale,-18.00,
+09/20/2026,09/21/2026,UBER *TRIP,Travel,Sale,-25.00,
+`;
+  let r = await s.call('POST', '/api/import/csv', { filename: 'Chase4821_Activity.CSV', content: csv, newAccount: { name: 'Sapphire', closingDay: 14 } });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  let state = r.body.state;
+  assert.deepEqual([state.dashboard.reviewTotal, state.dashboard.unreviewedCount, state.dashboard.unreviewedClosedCount], [6, 6, 5]);
+  const bill = (end) => state.bills.find((b) => b.end === end);
+  const [jul, aug, open] = ['2026-08-14', '2026-09-14', '2026-10-14'].map(bill);
+
+  r = await s.call('GET', '/api/classify');
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.groups.map((g) => g.end), ['2026-10-14', '2026-09-14', '2026-08-14']);
+
+  // July was already sent to the company: it drops out of the review.
+  r = await s.call('POST', `/api/bills/${jul.id}`, { submittedOn: '2026-08-20' });
+  r = await s.call('GET', '/api/classify');
+  assert.deepEqual(r.body.groups.map((g) => g.end), ['2026-10-14', '2026-09-14']);
+  const txns = r.body.groups.flatMap((g) => g.transactions);
+  const uber = txns.find((x) => x.date === '2026-08-29');
+  const netflix = txns.find((x) => x.description === 'NETFLIX.COM');
+  assert.equal(uber.similarCount, 2, 'the July Uber is in a statement already sent');
+
+  // "Personal: all from Uber" changes the open statements only...
+  r = await s.call('POST', '/api/transactions/bulk', { similarTo: uber.id, override: 'unclaim' });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.changed, 2);
+  assert.ok(r.body.transactions.every((x) => x.claim.status === 'excluded' && x.reviewed));
+  assert.equal(r.body.state.bills.find((b) => b.id === jul.id).claimCents, 33000);
+  // ...unless asked for all history.
+  r = await s.call('POST', '/api/transactions/bulk', { similarTo: uber.id, override: 'unclaim', scope: 'all' });
+  assert.equal(r.body.changed, 1);
+  assert.equal(r.body.state.bills.find((b) => b.id === jul.id).claimCents, 30000);
+
+  // A note alone doesn't count as reviewing; confirming does.
+  r = await s.call('POST', `/api/transactions/${netflix.id}`, { note: 'Team account' });
+  assert.equal(r.body.transaction.reviewed, false);
+  r = await s.call('POST', `/api/transactions/${netflix.id}`, { reviewed: true });
+  assert.equal(r.body.transaction.reviewed, true);
+  assert.equal(r.body.transaction.claim.status, 'claimed', 'confirming keeps the default');
+  r = await s.call('POST', `/api/transactions/${netflix.id}`, { reviewed: 'yes' });
+  assert.equal(r.status, 400);
+  r = await s.call('POST', '/api/transactions/bulk', { ids: [netflix.id] });
+  assert.equal(r.status, 400);
+  assert.match(r.body.error, /Nothing to change/);
+
+  // Confirm the rest of August.
+  const augIds = txns.filter((x) => x.billId === aug.id).map((x) => x.id);
+  r = await s.call('POST', '/api/transactions/bulk', { ids: augIds, reviewed: true });
+  assert.equal(r.body.changed, 1, 'only Delta was still unreviewed');
+  assert.deepEqual([r.body.state.dashboard.unreviewedCount, r.body.state.dashboard.unreviewedClosedCount], [0, 0]);
+
+  // Already reimbursed (outside the app): no longer owed. Open statements can't be.
+  r = await s.call('POST', `/api/bills/${open.id}`, { settledOn: '2026-09-30' });
+  assert.equal(r.status, 400);
+  assert.match(r.body.error, /not closed/);
+  const owedBefore = (await s.call('GET', '/api/state')).body.dashboard.owedCents;
+  r = await s.call('POST', `/api/bills/${aug.id}`, { settledOn: '2026-09-30' });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual([r.body.bill.bill.status, r.body.bill.bill.outstandingCents], ['reimbursed', 0]);
+  assert.equal(r.body.state.dashboard.owedCents, owedBefore - 45000 - 1549);
+  r = await s.call('GET', '/api/classify?summary=1');
+  assert.equal(r.body.groups.find((g) => g.billId === aug.id).settledOn, '2026-09-30');
+  r = await s.call('POST', `/api/bills/${aug.id}`, { settledOn: null });
+  assert.notEqual(r.body.bill.bill.status, 'reimbursed');
+
+  r = await s.call('GET', '/api/classify?cursor=nonsense');
+  assert.deepEqual(r.body.groups, []);
+});
