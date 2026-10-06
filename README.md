@@ -4,11 +4,11 @@ Track the work expenses you put on your own Chase credit cards, statement by sta
 
 - **Connects to Chase** through [Plaid](https://plaid.com) (free Trial plan) or [SimpleFIN Bridge](https://beta-bridge.simplefin.org) ($15/year), or by importing the CSV you download from chase.com.
 - **Groups transactions into bills** using each card's statement closing date.
-- **Everything is reimbursable by default.** Switch off a personal charge, claim only part of one, or add an "always exclude" rule (e.g. Netflix). Card fees, interest and rewards redemptions start out excluded (you can change that in Settings).
+- **Everything is business by default.** Mark a charge **Personal**, **Split** one (part business), or add an **Always personal** rule (e.g. Netflix). Card fees, interest and rewards redemptions start out personal (you can change that in Settings).
 - **Go back through your history** on the **Classify** page: statement by statement, mark what was business or personal (keyboard shortcuts included), apply a choice to every charge from the same merchant, and mark old statements you were already paid back for as reimbursed.
 - **Follows each bill**: statement closed → card paid (detected from your card payment) → sent to the company → reimbursed.
 - **Matches incoming Zelle payments** from your company to bills automatically, including one payment covering several bills. Partial payments are tracked until the rest arrives.
-- **Exports every bill**: a PDF, Excel or CSV report for your company (claimed items, business purpose, total, where to send the money) and a tracking workbook/CSV for your own records. You can also export everything at once.
+- **One request per statement**, with its own total: **Send request** gives you the total to copy, the PDF/Excel/CSV report for your company (business charges, business purpose, total, where to send the money) and a ready-made email. There's also a tracking workbook/CSV for your own records, and an export of everything at once.
 
 | Overview | A statement |
 | --- | --- |
@@ -90,39 +90,39 @@ You need three free accounts: Firebase, Vercel and Plaid (or SimpleFIN instead o
 
 ## How to use it
 
-1. **Connect Chase.** Credit cards become **Expense cards** (bills are tracked), and your checking account becomes **Receives Zelle** (reimbursements are detected there). You can change either on **Accounts**. With Plaid, the statement closing day is read from Chase; with CSV or SimpleFIN, pick it on **Accounts**. It's printed on your statement.
+1. **Connect Chase.** Credit cards become **Expense cards** (their statements are tracked), and your checking account becomes **Receives Zelle** (reimbursements are detected there). You can change either on **Accounts**. With Plaid, the statement closing day is read from Chase; with CSV or SimpleFIN, pick it on **Accounts**. It's printed on your statement.
 2. **Settings:**
-   - Enter your name, your company, the company's expenses email and your Zelle email or phone; these are printed on the reports.
+   - Enter your name, your company, the company's expenses email and your Zelle email or phone; these are printed on the requests.
    - Set **Only from these senders** to your company's name as it appears in Zelle, so a friend paying you back for dinner isn't counted.
    - Set **Track statements closing on or after** so old, already-settled statements don't count as owed.
-3. **Classify.** Everything is claimed until you say otherwise. Open **Classify** to go through the transactions you haven't looked at yet, newest statement first: **Business**, **Personal** or **Split** (claim part of it), plus a business purpose where it helps. When the personal ones are marked, **✓ Confirm the rest** keeps everything else as business. Shortcuts: <kbd>J</kbd>/<kbd>K</kbd> move, <kbd>B</kbd> business, <kbd>P</kbd> personal, <kbd>S</kbd> split, <kbd>N</kbd> note. You can also switch charges on and off on each statement.
+3. **Classify.** Everything is business until you say otherwise. Open **Classify** to go through the charges you haven't looked at yet, newest statement first: **Business**, **Personal** or **Split** (part business), plus a business purpose where it helps. When the personal ones are marked, **✓ Confirm the rest** keeps everything else as business. Shortcuts: <kbd>J</kbd>/<kbd>K</kbd> move, <kbd>B</kbd> business, <kbd>P</kbd> personal, <kbd>S</kbd> split, <kbd>N</kbd> note. Each statement page has the same buttons, and searching all your charges is on Classify too (**All history**).
    - **Right after connecting**, Chase sends the latest month first and the rest of the year a few minutes later; it appears on its own while the app is open.
    - **⋯ → Business/Personal — all from …** applies a choice to every charge from that merchant in statements you haven't sent yet. **Always personal** creates a rule for the future too.
    - **Old statements** you were already reimbursed for (before you used this app, or paid in a way the app can't see): use the statement's **⋯ → Already reimbursed** so it stops counting as owed. Switch to **All history** to go further back, including statements before your tracking start date.
-4. **After paying the card bill**, the statement shows **Ready to submit**. Click **Email report to company**: this downloads the PDF, opens a pre-written email to your company (attach the PDF) and asks whether to mark the statement as submitted.
-5. **When the Zelle arrives**, it's matched automatically if the amount equals one statement, or several together. Otherwise it appears under **Needs matching**, where you can apply the suggestion (oldest statements first) or split it yourself. A short payment leaves the statement **Partly reimbursed**, with the remainder still counted as owed.
+4. **After paying the card bill**, the statement shows **Ready to send**. Each statement is its own request with its own total. Click **Send request** (on the statement, in the **Statements** list or on the Overview): copy the total, download the PDF (or Excel/CSV), email it or copy a ready-made message, then **Mark request as sent**.
+5. **When the Zelle arrives**, it's matched automatically when the amount equals a statement's total (or a few statements together). Otherwise it appears under **Needs matching**, where you can apply the suggestion (oldest statements first) or split it yourself. A short payment leaves the statement **Partly reimbursed**, with the remainder still counted as owed. If the company paid by bank transfer or from a name the app doesn't recognize, find it under **Reimbursements → Other money received** and click **Count as reimbursement**.
 
-### What gets claimed
+### Business or personal
 
-| On an expense card | Claimed? |
+| On an expense card | In the request? |
 | --- | --- |
-| Purchases | Yes (default) |
-| Refunds and credits | Yes, they reduce the claim |
+| Purchases | Yes, business by default |
+| Refunds and credits | Yes, they lower the request |
 | Card payments | No, they're not expenses (used to detect that you paid the bill) |
-| Annual/late/foreign-transaction fees, interest | No by default (Settings) |
-| Rewards/points redemptions | No by default (Settings) |
-| Anything you switch off or cover with a rule | No |
-| Part of a charge ("Claim part of it…") | The amount you enter |
+| Annual/late/foreign-transaction fees, interest | No, personal by default (Settings) |
+| Rewards/points redemptions | No, personal by default (Settings) |
+| Anything you mark **Personal** or cover with an **Always personal** rule | No |
+| **Split** charges | The business part you enter |
 
 ### Statement statuses
 
-**Current cycle** → **Not paid yet** → **Ready to submit** → **Submitted** → **Partly reimbursed** → **Reimbursed**. A statement where everything is personal shows **Nothing to claim**; one you marked as already reimbursed shows **Marked reimbursed**.
+**Current cycle** → **Card not paid yet** → **Ready to send** → **Request sent** → **Partly reimbursed** → **Reimbursed**. A statement where everything is personal shows **Nothing to request**; one you marked as already reimbursed shows **Marked reimbursed**.
 
 ### Exports
 
-- **Per statement → Download**
-  - *For your company*: PDF, Excel or CSV with the claimed items, business purpose, total and your Zelle details. Tick "Also list personal items" to show the whole statement, with personal items marked "not claimed".
-  - *For your records*: a tracking workbook or CSV with every transaction, its claim status, and what was received and what's still owed.
+- **Per statement → Send request** (or **Download**)
+  - *For your company*: PDF, Excel or CSV with the business charges, business purpose, total and your Zelle details. Tick "Also list the personal charges" to show the whole statement, with personal ones marked "not claimed".
+  - *For your records*: a tracking workbook or CSV with every charge, business or personal, and what was received and what's still owed.
 - **Statements → Export all**: an Excel workbook with sheets for all statements, all claimable transactions and all reimbursements, or a CSV summary.
 
 ---
@@ -192,5 +192,5 @@ Everything lives under `users/{uid}`: `accounts`, `bills`, `reimbursements`, `ru
 - **"… is not allowed to use this app":** add that email to `ALLOWED_EMAILS` and redeploy.
 - **"Plaid: invalid client_id or secret provided":** Plaid has a separate secret for Sandbox and Production. `PLAID_SECRET` must be the one matching `PLAID_ENV` (production by default). Fix it in Vercel, then redeploy.
 - **Chase is missing in Plaid, or OAuth fails:** finish Plaid's onboarding for your plan. To connect from a phone, set `PLAID_REDIRECT_URI` as described above.
-- **Transactions land in the wrong statement:** set the correct closing day on **Accounts**, or change one statement's closing date under **Statement details** (the next statement adjusts).
+- **Charges land in the wrong statement:** set the correct closing day on **Accounts**, or change one statement's closing date under **Statement details** (the next statement adjusts).
 - **A personal Zelle shows up as a reimbursement:** set **Only from these senders** in Settings, or mark it **Not a reimbursement**.

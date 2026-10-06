@@ -26,7 +26,6 @@ test('pages export their components', async () => {
     'pages/bills.js': 'BillsPage',
     'pages/bill.js': 'BillPage',
     'pages/reimbursements.js': 'ReimbursementsPage',
-    'pages/transactions.js': 'TransactionsPage',
     'pages/classify.js': 'ClassifyPage',
     'pages/accounts.js': 'AccountsPage',
     'pages/settings.js': 'SettingsPage',

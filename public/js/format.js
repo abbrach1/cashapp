@@ -74,25 +74,16 @@ export function localToday() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// The same words everywhere: charges are business or personal (or split);
+// each statement is one request to your company.
 export const STATUS = {
   open: { label: 'Current cycle', hint: 'Statement not closed yet' },
-  nothing: { label: 'Nothing to claim', hint: 'All items excluded' },
-  unpaid: { label: 'Not paid yet', hint: 'Statement closed; pay the card, then submit' },
-  ready: { label: 'Ready to submit', hint: 'Paid; send the report to your company' },
-  submitted: { label: 'Submitted', hint: 'Waiting for reimbursement' },
+  nothing: { label: 'Nothing to request', hint: 'Every charge is personal' },
+  unpaid: { label: 'Card not paid yet', hint: 'Statement closed: pay the card, then send the request' },
+  ready: { label: 'Ready to send', hint: 'Card paid: send the request to your company' },
+  submitted: { label: 'Request sent', hint: 'Waiting for your company to pay you back' },
   partial: { label: 'Partly reimbursed', hint: 'Some money still owed' },
   reimbursed: { label: 'Reimbursed', hint: 'Fully paid back' },
-};
-
-export const REASON = {
-  default: null,
-  included: 'Included by you',
-  excluded: 'Personal',
-  partial: 'Partly claimed',
-  rule: 'Rule',
-  fee: 'Card fee',
-  reward: 'Rewards',
-  payment: 'Card payment',
 };
 
 export const ROLE_LABEL = {

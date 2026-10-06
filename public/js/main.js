@@ -10,7 +10,6 @@ import { OverviewPage } from './pages/overview.js';
 import { BillsPage } from './pages/bills.js';
 import { BillPage } from './pages/bill.js';
 import { ReimbursementsPage } from './pages/reimbursements.js';
-import { TransactionsPage } from './pages/transactions.js';
 import { ClassifyPage } from './pages/classify.js';
 import { AccountsPage } from './pages/accounts.js';
 import { SettingsPage } from './pages/settings.js';
@@ -20,7 +19,6 @@ const NAV = [
   ['/bills', 'Statements'],
   ['/classify', 'Classify'],
   ['/reimbursements', 'Reimbursements'],
-  ['/transactions', 'Transactions'],
   ['/accounts', 'Accounts'],
   ['/settings', 'Settings'],
 ];
@@ -59,9 +57,10 @@ function Page({ route }) {
   const [section, id] = route.parts;
   if (!section) return html`<${OverviewPage} />`;
   if (section === 'bills' && id) return html`<${BillPage} id=${id} />`;
-  if (section === 'bills') return html`<${BillsPage} query=${route.query} />`;
+  if (section === 'bills') return html`<${BillsPage} key=${route.query.toString()} query=${route.query} />`;
   if (section === 'reimbursements') return html`<${ReimbursementsPage} />`;
-  if (section === 'transactions') return html`<${TransactionsPage} />`;
+  // Old links: everything you could do on Transactions is on Classify now.
+  if (section === 'transactions') return html`<${ClassifyPage} key="transactions" query=${new URLSearchParams('show=all&scope=all')} />`;
   if (section === 'classify') return html`<${ClassifyPage} key=${route.query.toString()} query=${route.query} />`;
   if (section === 'accounts') return html`<${AccountsPage} />`;
   if (section === 'settings') return html`<${SettingsPage} />`;

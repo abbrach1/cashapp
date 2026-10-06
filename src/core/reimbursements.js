@@ -81,7 +81,7 @@ export function detectReimbursements(uow, settings) {
   }
   for (const r of uow.list('reimbursements')) {
     if (!r.txnId || matchedIds.has(r.id)) continue;
-    const untouched = r.status === 'active' && !r.manual && !(r.allocations?.length) && !r.note;
+    const untouched = r.status === 'active' && !r.manual && !r.counted && !(r.allocations?.length) && !r.note;
     if (untouched) uow.delete('reimbursements', r.id);
   }
 }
@@ -164,6 +164,42 @@ export function setAllocations(uow, id, allocations) {
     allocations: [...merged].map(([billId, amountCents]) => ({ billId, amountCents, auto: false })),
     manual: true,
   });
+}
+
+/**
+ * Count a deposit the automatic detection skipped (another sender name, a bank
+ * transfer instead of Zelle...) as a reimbursement. It is matched to
+ * statements like any other.
+ * @param {import('../store/model.js').UnitOfWork} uow
+ * @param {string} txnId
+ */
+export function countAsReimbursement(uow, txnId) {
+  const txn = uow.getTxn(txnId);
+  if (!txn) throw new UserError('Transaction not found', 404);
+  if (txn.pending || txn.amountCents >= 0) throw new UserError('Only money you received can be a reimbursement');
+  const existing = uow.list('reimbursements').find((r) => r.txnId === txn.id);
+  if (existing) {
+    if (existing.status !== 'active' || !existing.counted) uow.patch('reimbursements', existing.id, { status: 'active', counted: true });
+    return existing.id;
+  }
+  const text = txn.rawDescription || txn.description;
+  const id = reimbursementIdFor(txn.id);
+  uow.put('reimbursements', {
+    id,
+    txnId: txn.id,
+    accountId: txn.accountId,
+    date: txn.date,
+    amountCents: -txn.amountCents,
+    sender: parseZelleSender(text) ?? parseZelleSender(txn.description),
+    description: txn.description,
+    method: /zelle|quickpay/i.test(text) ? 'zelle' : 'other',
+    status: 'active',
+    allocations: [],
+    manual: false,
+    counted: true,
+    createdAt: new Date().toISOString(),
+  });
+  return id;
 }
 
 /**

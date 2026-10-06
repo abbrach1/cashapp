@@ -14,22 +14,23 @@ export const KIND_LABELS = {
   withdrawal: 'Withdrawal',
 };
 
+// Same words as the app: business / personal / split.
 export const REASON_LABELS = {
-  default: 'Claimed',
-  included: 'Claimed (included by you)',
-  excluded: 'Excluded by you',
-  partial: 'Partly claimed',
-  rule: 'Excluded by rule',
-  fee: 'Card fee/interest (excluded by default)',
-  reward: 'Rewards credit (excluded by default)',
+  default: 'Business',
+  included: 'Business (your choice)',
+  excluded: 'Personal (your choice)',
+  partial: 'Split (part business)',
+  rule: 'Personal (always-personal rule)',
+  fee: 'Card fee/interest (personal by default)',
+  reward: 'Rewards credit (personal by default)',
 };
 
 export const STATUS_LABELS = {
   open: 'Current cycle',
-  nothing: 'Nothing to claim',
+  nothing: 'Nothing to request',
   unpaid: 'Closed – card not paid yet',
-  ready: 'Paid – ready to submit',
-  submitted: 'Submitted – awaiting reimbursement',
+  ready: 'Card paid – ready to send',
+  submitted: 'Request sent – awaiting reimbursement',
   partial: 'Partly reimbursed',
   reimbursed: 'Reimbursed',
 };

@@ -1,7 +1,8 @@
 // Shapes sent to the browser.
 
 import { accountLabel } from './exports/report.js';
-import { classifiable, isReviewed, merchantKey, statementOf } from './core/review.js';
+import { addDays } from './lib/dates.js';
+import { IN_PLAY_STATUSES, classifiable, isReviewed, merchantCounts, merchantKey, statementOf } from './core/review.js';
 
 export function connectionView(c) {
   return {
@@ -118,10 +119,13 @@ export function billDetailView(snapshot, ledger, billId) {
   const siblings = ledger.billsByAccount.get(bill.accountId) ?? [];
   const idx = siblings.findIndex((b) => b.id === billId);
   const next = siblings[idx + 1];
+  // "All from <merchant>" changes statements still in play, plus this one.
+  const similar = merchantCounts(snapshot, ledger, 'open');
+  const self = bill.visible && IN_PLAY_STATUSES.has(bill.status) ? 0 : 1;
   const txns = [...snapshot.txns.values()]
     .filter((t) => ledger.txnBill.get(t.id) === billId)
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : 1))
-    .map((t) => txnView(t, ledger));
+    .map((t) => ({ ...txnView(t, ledger), similarCount: Math.max(1, (similar.get(merchantKey(t)) ?? 0) + self) }));
   const windowEnd = next ? next.end : '9999-12-31';
   const payments = [...snapshot.txns.values()]
     .filter((t) => t.accountId === bill.accountId && t.kind === 'payment' && !t.pending && t.date > bill.end && t.date <= windowEnd)
@@ -187,16 +191,14 @@ export function classifyView(snapshot, ledger, opts = {}) {
   const limit = opts.limit ?? 250;
 
   const items = [];
-  /** @type {Map<string, number>} same-merchant counts (what "all from …" would change) */
-  const similar = new Map();
   for (const item of classifiable(snapshot, ledger)) {
     const s = statementOf(item.txn, snapshot.accounts.get(item.txn.accountId), ledger);
     const inScope = scope === 'all' || s.inPlay;
     if (!inScope && !opts.summary) continue;
     items.push({ ...item, s, inScope });
-    const key = merchantKey(item.txn);
-    if (key && inScope) similar.set(key, (similar.get(key) ?? 0) + 1);
   }
+  // What "all from <merchant>" would change.
+  const similar = opts.summary ? new Map() : merchantCounts(snapshot, ledger, scope);
 
   const stats = { total: 0, reviewed: 0, claimCents: 0, amountCents: 0 };
   /** @type {Map<string, any>} */
@@ -274,9 +276,27 @@ export function classifyView(snapshot, ledger, opts = {}) {
       ...g,
       transactions: txns
         .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : 1))
-        .map((t) => ({ ...txnView(t, ledger), similarCount: similar.get(merchantKey(t)) ?? 1 })),
+        .map((t) => ({ ...txnView(t, ledger), similarCount: similar.get(merchantKey(t)) || 1 })),
     })),
     nextCursor: rest.length ? encodeCursor(page[page.length - 1]) : null,
     more: { statements: rest.length, transactions: rest.reduce((n, g) => n + g.txns.length, 0) },
   };
+}
+
+/**
+ * Money received on accounts watched for reimbursements that isn't counted as
+ * one (a different sender name, a bank transfer instead of Zelle, payroll...).
+ * @param {import('./store/model.js').Snapshot} snapshot
+ * @param {{ today: string, days?: number }} opts
+ */
+export function otherDepositsView(snapshot, { today, days = 90 }) {
+  const since = addDays(today, -days);
+  const linked = new Set([...snapshot.reimbursements.values()].map((r) => r.txnId).filter(Boolean));
+  const out = [];
+  for (const t of snapshot.txns.values()) {
+    const account = snapshot.accounts.get(t.accountId);
+    if (account?.role !== 'reimbursements' || t.pending || t.amountCents >= 0 || t.date < since || linked.has(t.id)) continue;
+    out.push({ id: t.id, accountId: t.accountId, accountLabel: accountLabel(account), date: t.date, description: t.description, amountCents: -t.amountCents });
+  }
+  return out.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.id < b.id ? -1 : 1)).slice(0, 200);
 }

@@ -1,8 +1,8 @@
-import { html, useState } from '../../vendor/preact.js';
-import { del, post } from '../api.js';
+import { html, useEffect, useState } from '../../vendor/preact.js';
+import { del, get, post } from '../api.js';
 import { longDate, money, period, plural } from '../format.js';
 import { attempt, refresh, useStore } from '../store.js';
-import { AsyncButton, Empty, Menu, Money } from '../ui.js';
+import { AsyncButton, Empty, Menu, Money, Skeleton } from '../ui.js';
 import { AllocationDialog, ManualReimbursementDialog } from '../components/dialogs.js';
 
 function billLabel(state, billId) {
@@ -33,8 +33,55 @@ function NeedsMatching({ r, state, onAllocate }) {
             ${r.suggestion.map((s) => html`<div class="spread small" key=${s.billId}><span>${billLabel(state, s.billId)}</span><b><${Money} cents=${s.amountCents} /></b></div>`)}
             <div style="margin-top:10px"><${AsyncButton} class="btn sm primary" onClick=${accept}>Apply suggestion<//></div>
           </div>`
-        : html`<div class="small muted">No statement is waiting for money. If this is for a statement you haven't tracked, record it there or mark it as not a reimbursement.</div>`}
+        : html`<div class="small muted">No statement is waiting for money. If it pays a statement from before you started tracking, mark that statement as already reimbursed, or mark this as not a reimbursement.</div>`}
     </div>
+  </div>`;
+}
+
+/**
+ * Deposits that weren't picked up as reimbursements (a different sender name,
+ * a bank transfer instead of Zelle...), so a missed payment is easy to find.
+ */
+function OtherDeposits() {
+  const { state } = useStore();
+  const [open, setOpen] = useState(false);
+  const [list, setList] = useState(null);
+  const load = () =>
+    get('/deposits')
+      .then((res) => setList(res.deposits))
+      .catch(() => setList([]));
+  useEffect(() => {
+    if (open) load();
+  }, [open, state.lastSyncedAt]);
+  const count = (d) =>
+    attempt(async () => {
+      const res = await post('/reimbursements/from-txn', { txnId: d.id });
+      refresh(res.state);
+      await load();
+    }, `Counted ${money(d.amountCents)} as a reimbursement.`);
+  return html`<div class="card">
+    <div class="card-head">
+      <div>
+        <h2>Other money received</h2>
+        <div class="small muted">Deposits from the last 90 days that aren't counted as reimbursements. Company payment missing? Count it here.</div>
+      </div>
+      <button class="btn sm" onClick=${() => setOpen(!open)}>${open ? 'Hide' : 'Show'}</button>
+    </div>
+    ${!open
+      ? null
+      : !list
+        ? html`<div class="card-body stack"><${Skeleton} height=${18} /><${Skeleton} height=${18} /></div>`
+        : list.length
+          ? html`<ul class="list">
+              ${list.map(
+                (d) => html`<li key=${d.id}>
+                  <div class="grow"><div class="merchant">${d.description}</div><div class="sub-desc">${longDate(d.date)} · ${d.accountLabel}</div></div>
+                  <${Money} cents=${d.amountCents} className="merchant" />
+                  <${AsyncButton} class="btn sm" onClick=${() => count(d)}>Count as reimbursement<//>
+                </li>`,
+              )}
+            </ul>`
+          : html`<div class="card-body small muted">Nothing else arrived in the last 90 days.</div>`}
   </div>`;
 }
 
@@ -120,6 +167,8 @@ export function ReimbursementsPage() {
         : html`<${Empty} title="No reimbursements yet" icon="⇄">When your company pays you back by Zelle, the payment shows up here after the next bank sync.<//>`}
       <div class="card-foot small muted">Received this year: <b>${money(state.dashboard.receivedYtdCents)}</b></div>
     </div>
+
+    <${OtherDeposits} />
 
     <${AllocationDialog} open=${Boolean(allocating)} reimbursement=${allocating && state.reimbursements.find((r) => r.id === allocating.id)} onClose=${() => setAllocating(null)} />
     <${ManualReimbursementDialog} open=${adding} onClose=${() => setAdding(false)} />

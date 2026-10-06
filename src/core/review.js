@@ -74,6 +74,31 @@ export function* classifiable(snapshot, ledger) {
   }
 }
 
+/**
+ * Card charges (pending ones too) that "all from <merchant>" may change: in
+ * statements still in play, or anywhere with scope "all".
+ * @param {import('../store/model.js').Snapshot} snapshot
+ * @param {{ claims: Map<string, any>, txnBill: Map<string, string>, bills: Map<string, any>, trackingStart: string|null }} ledger
+ * @param {'open'|'all'} scope
+ */
+export function* chargesInScope(snapshot, ledger, scope) {
+  for (const t of snapshot.txns.values()) {
+    if (!ledger.claims.get(t.id)?.applicable) continue;
+    if (scope !== 'all' && !statementOf(t, snapshot.accounts.get(t.accountId), ledger).inPlay) continue;
+    yield t;
+  }
+}
+
+/** merchantKey -> number of charges in scope. */
+export function merchantCounts(snapshot, ledger, scope) {
+  const counts = new Map();
+  for (const t of chargesInScope(snapshot, ledger, scope)) {
+    const key = merchantKey(t);
+    if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}
+
 /** How many transactions in open statements are reviewed. */
 export function reviewProgress(snapshot, ledger) {
   const out = { total: 0, unreviewed: 0, unreviewedClosed: 0 };

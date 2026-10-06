@@ -145,7 +145,7 @@ export function seedDemo(uow, { today }) {
   }
   bankUpserts.push({ accountExternalId: 'demo-checking', externalId: 'demo-friend', date: addDays(today, -6), description: 'Zelle Payment From Jordan Lee Wfct0q2k3m9x', amountCents: -4500 });
   ingest(uow, { source: 'demo', connectionId, accounts: [...cardAccounts, checking], upserts: payments });
-  ingest(uow, { source: 'demo', connectionId, accounts: [...cardAccounts, checking], upserts: bankUpserts });
+  ingest(uow, { source: 'demo', connectionId, accounts: [...cardAccounts, checking], upserts: bankUpserts.filter((u) => u.date <= today) });
   reconcile(uow, { today });
 
   // Submit and get reimbursed for older statements.

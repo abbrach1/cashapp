@@ -202,7 +202,7 @@ export function AllocationDialog({ reimbursement: r, open, onClose }) {
       </div>
       ${candidates.length
         ? html`<div class="table-wrap"><table class="data">
-            <thead><tr><th>Statement</th><th class="amount">Claimed</th><th class="amount">Still owed</th><th class="amount">Apply</th></tr></thead>
+            <thead><tr><th>Statement</th><th class="amount">Requested</th><th class="amount">Still owed</th><th class="amount">Apply</th></tr></thead>
             <tbody>
               ${candidates.map(
                 (b) => html`<tr key=${b.id}>
@@ -261,7 +261,7 @@ export function ManualReimbursementDialog({ open, onClose }) {
 }
 
 // ---------------------------------------------------------------------------
-// Claim only part of a transaction
+// Split a charge: part business, part personal
 
 export function PartialDialog({ txn, open, onClose, onSaved }) {
   const [amount, setAmount] = useState('');
@@ -282,22 +282,22 @@ export function PartialDialog({ txn, open, onClose, onSaved }) {
   return html`<${Modal}
     open=${open}
     onClose=${onClose}
-    title="Claim part of this charge"
+    title="Split this charge"
     footer=${html`<button class="btn" onClick=${onClose}>Cancel</button>
       <${AsyncButton} class="btn primary" disabled=${cents === null} onClick=${save}>Save<//>`}
   >
     <div class="stack">
       <div><div class="merchant">${txn.merchant ?? txn.description}</div><div class="sub-desc">${txn.date} · charged ${money(txn.amountCents)}</div></div>
       <div class="form-grid">
-        <${Field} label="Amount to claim"><input inputmode="decimal" value=${amount} onInput=${(e) => setAmount(e.currentTarget.value)} /><//>
-        <${Field} label="Business purpose / note"><input value=${note} placeholder="e.g. Client dinner, my guest not claimed" onInput=${(e) => setNote(e.currentTarget.value)} /><//>
+        <${Field} label="Business part" hint="The rest counts as personal"><input inputmode="decimal" value=${amount} onInput=${(e) => setAmount(e.currentTarget.value)} /><//>
+        <${Field} label="Business purpose / note"><input value=${note} placeholder="e.g. Client dinner; my guest's share is personal" onInput=${(e) => setNote(e.currentTarget.value)} /><//>
       </div>
     </div>
   <//>`;
 }
 
 // ---------------------------------------------------------------------------
-// Always exclude a merchant
+// Always personal: a rule for a merchant
 
 export function RuleDialog({ open, onClose, initialPattern = '', accountId = null }) {
   const { state } = useStore();
@@ -315,16 +315,16 @@ export function RuleDialog({ open, onClose, initialPattern = '', accountId = nul
       const res = await post('/rules', { pattern, accountId: scope || null, note: note || null });
       refresh(res.state);
       onClose(true);
-    }, `Transactions containing "${pattern}" will be excluded.`);
+    }, `Charges containing "${pattern}" are now personal.`);
   return html`<${Modal}
     open=${open}
     onClose=${() => onClose(false)}
-    title="Always exclude…"
+    title="Always personal…"
     footer=${html`<button class="btn" onClick=${() => onClose(false)}>Cancel</button>
       <${AsyncButton} class="btn primary" disabled=${pattern.trim().length < 2} onClick=${save}>Create rule<//>`}
   >
     <div class="stack">
-      <p class="small muted" style="margin:0">Use this for personal things on your work card, like streaming or groceries. It applies to past and future transactions; you can still include a single one by hand.</p>
+      <p class="small muted" style="margin:0">For personal things you put on a work card, like streaming or groceries. It applies to past and future charges; you can still mark a single one as business.</p>
       <${Field} label="Description contains" hint="Not case sensitive"><input value=${pattern} onInput=${(e) => setPattern(e.currentTarget.value)} /><//>
       <div class="form-grid">
         <${Field} label="On">

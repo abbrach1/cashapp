@@ -165,7 +165,7 @@ export function AccountsPage() {
           </table></div>`
         : html`<${Empty} title="No accounts yet">Connect Chase or import a CSV above.<//>`}
       <div class="card-foot small muted">
-        <b>Expense card</b>: every charge is claimed unless you exclude it; transactions are grouped into statements by the closing day.
+        <b>Expense card</b>: every charge counts as business unless you mark it personal; charges are grouped into statements by the closing day.
         <b> Receives Zelle</b>: incoming Zelle payments here are treated as reimbursements.
       </div>
     </div>

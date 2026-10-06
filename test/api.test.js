@@ -329,3 +329,57 @@ test('classify: review history, apply to the same merchant, mark statements alre
   r = await s.call('GET', '/api/classify?cursor=nonsense');
   assert.deepEqual(r.body.groups, []);
 });
+
+test('other money received can be counted as a reimbursement; statement charges know their same-merchant count', async (t) => {
+  const s = await serve();
+  t.after(s.close);
+  const card = `Transaction Date,Post Date,Description,Category,Type,Amount,Memo
+08/19/2026,08/20/2026,DELTA AIR LINES,Travel,Sale,-450.00,
+08/21/2026,08/22/2026,UBER *TRIP,Travel,Sale,-18.00,
+09/20/2026,09/21/2026,UBER *TRIP,Travel,Sale,-25.00,
+09/25/2026,09/25/2026,Payment Thank You-Mobile,,Payment,468.00,
+`;
+  const bank = `Details,Posting Date,Description,Amount,Type,Balance,Check or Slip #
+CREDIT,09/28/2026,"ACME CORP EXPENSE REIMB PPD ID: 99",468.00,ACH_CREDIT,5300.00,,
+CREDIT,09/27/2026,"Zelle Payment From Jordan Lee Wfct0q2k3m9x",45.00,QUICKPAY_CREDIT,4832.00,,
+`;
+  let r = await s.call('POST', '/api/import/csv', { filename: 'Chase4821_Activity.CSV', content: card, newAccount: { name: 'Sapphire', closingDay: 14 } });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  r = await s.call('POST', '/api/import/csv', { filename: 'Chase9912_Activity.CSV', content: bank });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  // The friend's Zelle is picked up (no sender filter yet); the company's ACH transfer is not.
+  assert.deepEqual(r.body.state.reimbursements.map((x) => x.sender), ['Jordan Lee']);
+  const friend = r.body.state.reimbursements[0];
+  r = await s.call('POST', `/api/reimbursements/${friend.id}`, { status: 'ignored' });
+  assert.equal(r.status, 200);
+
+  r = await s.call('GET', '/api/deposits');
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.deposits.map((d) => [d.description.slice(0, 9), d.amountCents]), [['ACME CORP', 46800]]);
+  const ach = r.body.deposits[0];
+
+  r = await s.call('POST', '/api/reimbursements/from-txn', { txnId: ach.id });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const counted = r.body.state.reimbursements.find((x) => x.txnId === ach.id);
+  assert.equal(counted.status, 'active');
+  // It equals the August statement exactly, so it's matched like any Zelle.
+  const aug = r.body.state.bills.find((b) => b.end === '2026-09-14');
+  assert.deepEqual(counted.allocations, [{ billId: aug.id, amountCents: 46800, auto: true }]);
+  assert.equal(aug.status, 'reimbursed');
+  r = await s.call('GET', '/api/deposits');
+  assert.deepEqual(r.body.deposits, []);
+
+  // Detection settings changing later don't drop it.
+  r = await s.call('POST', '/api/settings', { senderFilters: ['nobody'] });
+  assert.ok(r.body.state.reimbursements.some((x) => x.txnId === ach.id && x.allocations.length === 1));
+
+  // Charges can't be counted; the route isn't mistaken for /reimbursements/:id.
+  const detail = (await s.call('GET', `/api/bills/${aug.id}`)).body;
+  r = await s.call('POST', '/api/reimbursements/from-txn', { txnId: detail.transactions[0].id });
+  assert.equal(r.status, 400);
+  assert.match(r.body.error, /money you received/);
+
+  // "All from Uber" on a statement page: only statements still in play count, plus this one.
+  const uberAug = detail.transactions.find((x) => x.description === 'UBER *TRIP');
+  assert.equal(uberAug.similarCount, 2, 'the open-cycle Uber and this one');
+});

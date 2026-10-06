@@ -4,13 +4,14 @@ import { download } from '../api.js';
 import { attempt, useStore } from '../store.js';
 import { Empty, Menu } from '../ui.js';
 import { BillsTable } from '../components/bills.js';
+import { useSendRequest } from '../components/request.js';
 
 const FILTERS = [
   ['all', 'All'],
   ['owed', 'Still owed'],
-  ['ready', 'Ready to submit'],
-  ['submitted', 'Submitted'],
-  ['unpaid', 'Not paid'],
+  ['ready', 'Ready to send'],
+  ['submitted', 'Request sent'],
+  ['unpaid', 'Card not paid'],
   ['reimbursed', 'Reimbursed'],
   ['open', 'Current'],
 ];
@@ -31,12 +32,13 @@ export function BillsPage({ query }) {
   const bills = state.bills.filter((b) => (showOld || b.visible) && (!accountId || b.accountId === accountId) && matches(b, filter));
   const hiddenCount = state.bills.filter((b) => !b.visible).length;
   const owed = bills.reduce((s, b) => s + (['unpaid', 'ready', 'submitted', 'partial'].includes(b.status) ? Math.max(0, b.outstandingCents) : 0), 0);
+  const [openRequest, requestDialog] = useSendRequest();
 
   return html`<div class="stack-lg">
     <div class="page-head">
       <div>
         <h1>Statements</h1>
-        <p class="muted">Each card statement is one bill. Pay it, send the report, get reimbursed.</p>
+        <p class="muted">Each card statement is its own request: pay the card, send the request with its total, get reimbursed.</p>
       </div>
       <${Menu} class="btn" label="Export all ▾">
         <div class="menu-label">Everything, for your records</div>
@@ -57,7 +59,7 @@ export function BillsPage({ query }) {
           : null}
       </div>
       ${bills.length
-        ? html`<${BillsTable} bills=${bills} today=${state.today} showCard=${!accountId && cards.length > 1} />`
+        ? html`<${BillsTable} bills=${bills} today=${state.today} showCard=${!accountId && cards.length > 1} onSend=${(b) => openRequest(b.id)} />`
         : html`<${Empty} title="Nothing here">No statements match this filter.<//>`}
       <div class="card-foot spread small">
         <span class="muted">${plural(bills.length, 'statement')}${owed ? html` · <b style="color:var(--text)">${money(owed)}</b> still owed` : ''}</span>
@@ -66,5 +68,6 @@ export function BillsPage({ query }) {
           : null}
       </div>
     </div>
+    ${requestDialog}
   </div>`;
 }

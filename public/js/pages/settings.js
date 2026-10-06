@@ -45,13 +45,13 @@ export function SettingsPage() {
     <div class="page-head"><div><h1>Settings</h1></div></div>
 
     <div class="card">
-      <div class="card-head"><h2>You and your company</h2><span class="small muted">Printed on the reports you send</span></div>
+      <div class="card-head"><h2>You and your company</h2><span class="small muted">Printed on the requests you send</span></div>
       <div class="card-body stack">
         <div class="form-grid">
           <${Field} label="Your name"><input value=${form.yourName} onInput=${set('yourName')} /><//>
           <${Field} label="Your email"><input type="email" value=${form.yourEmail} onInput=${set('yourEmail')} /><//>
           <${Field} label="Company"><input value=${form.companyName} onInput=${set('companyName')} /><//>
-          <${Field} label="Company expenses email" hint=${'Used by the “Email report” button'}><input type="email" value=${form.companyEmail} onInput=${set('companyEmail')} /><//>
+          <${Field} label="Company expenses email" hint=${'Used by “Send request”'}><input type="email" value=${form.companyEmail} onInput=${set('companyEmail')} /><//>
           <${Field} label="Your Zelle email or phone" hint="Shown on the report so they know where to pay"><input value=${form.zelleHandle} onInput=${set('zelleHandle')} /><//>
           <${Field} label="Report title"><input value=${form.reportTitle} onInput=${set('reportTitle')} /><//>
         </div>
@@ -60,13 +60,13 @@ export function SettingsPage() {
     </div>
 
     <div class="card">
-      <div class="card-head"><h2>What gets claimed</h2></div>
+      <div class="card-head"><h2>Business or personal</h2></div>
       <div class="card-body stack">
-        <p class="small muted" style="margin:0">Every charge on an expense card is claimed unless you switch it off. Card payments are never claimed. Refunds reduce the claim.</p>
+        <p class="small muted" style="margin:0">Every charge on a work card is business (included in the request) unless you mark it personal. Card payments never count. Refunds lower the request.</p>
         <label class="check"><input type="checkbox" checked=${form.excludeFeesByDefault} onChange=${set('excludeFeesByDefault')} />
-          <span>Leave out card fees and interest (annual fee, late fee, foreign transaction fee, interest)<div class="small muted">You can still include one by switching it on.</div></span></label>
+          <span>Treat card fees and interest as personal (annual fee, late fee, foreign transaction fee, interest)<div class="small muted">You can still mark one as business.</div></span></label>
         <label class="check"><input type="checkbox" checked=${form.excludeRewardsByDefault} onChange=${set('excludeRewardsByDefault')} />
-          <span>Leave out rewards redemptions (points/cash-back statement credits)<div class="small muted">Otherwise they would reduce what you claim.</div></span></label>
+          <span>Treat rewards redemptions as personal (points/cash-back statement credits)<div class="small muted">Otherwise they would lower your requests.</div></span></label>
         <${Field} label="Track statements closing on or after" hint="Older statements are hidden and not counted as owed.">
           <input type="date" value=${form.trackingStartDate} onInput=${set('trackingStartDate')} style="max-width:200px" />
         <//>
@@ -75,7 +75,7 @@ export function SettingsPage() {
     </div>
 
     <div class="card">
-      <div class="card-head"><h2>Always exclude</h2><button class="btn sm" onClick=${() => setRuleOpen(true)}>+ Add rule</button></div>
+      <div class="card-head"><h2>Always personal</h2><button class="btn sm" onClick=${() => setRuleOpen(true)}>+ Add rule</button></div>
       ${state.rules.length
         ? html`<ul class="list">
             ${state.rules.map(
@@ -85,7 +85,7 @@ export function SettingsPage() {
               </li>`,
             )}
           </ul>`
-        : html`<div class="card-body small muted">No rules. Add one for recurring personal charges on a work card (e.g. "NETFLIX").</div>`}
+        : html`<div class="card-body small muted">No rules. Add one for recurring personal charges on a work card (e.g. "NETFLIX"); they'll be personal automatically.</div>`}
     </div>
 
     <div class="card">

@@ -1,6 +1,6 @@
 import { html, useEffect, useRef, useState } from '../vendor/preact.js';
 import { money, STATUS } from './format.js';
-import { useStore } from './store.js';
+import { toast, useStore } from './store.js';
 
 export function Money({ cents, className = '', sign = false }) {
   return html`<span class=${`money ${cents < 0 ? 'neg' : ''} ${className}`}>${money(cents, { sign })}</span>`;
@@ -26,11 +26,25 @@ export function Progress({ value, max }) {
   </div>`;
 }
 
-export function Toggle({ checked, onChange, disabled = false, label }) {
-  return html`<label class="switch" title=${label}>
-    <input type="checkbox" checked=${checked} disabled=${disabled} aria-label=${label} onChange=${(e) => onChange(e.currentTarget.checked)} />
-    <span class="slider"></span>
-  </label>`;
+/** Copy text to the clipboard (with a fallback for older browsers) and say so. */
+export async function copyText(text, message = 'Copied.') {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    try {
+      document.execCommand('copy');
+    } finally {
+      area.remove();
+    }
+  }
+  toast(message);
 }
 
 /** A button that shows a spinner while its async onClick runs. */

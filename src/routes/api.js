@@ -7,14 +7,14 @@ import { reconcile } from '../core/reconcile.js';
 import { claimInfo, sanitizeClaimChange } from '../core/claims.js';
 import { getSettings, sanitizeSettingsPatch } from '../core/settings.js';
 import { setClosingDate } from '../core/bills.js';
-import { addManualReimbursement, setAllocations } from '../core/reimbursements.js';
+import { addManualReimbursement, countAsReimbursement, setAllocations } from '../core/reimbursements.js';
 import { ingest, defaultRole } from '../core/ingest.js';
 import { connectPlaid, connectSimplefin, disconnect, plaidLinkToken, syncAll, syncConnection } from '../core/sync.js';
 import { parseChaseCSV } from '../providers/chaseCsv.js';
 import { billReport } from '../exports/report.js';
 import { companyCSV, ledgerCSV, trackingCSV } from '../exports/csv.js';
-import { billDetailView, classifyView, searchText, stateView, txnView } from '../views.js';
-import { merchantKey, statementOf } from '../core/review.js';
+import { billDetailView, classifyView, otherDepositsView, searchText, stateView, txnView } from '../views.js';
+import { chargesInScope, merchantKey } from '../core/review.js';
 import { seedDemo } from '../demo/seed.js';
 
 const ROLES = ['expenses', 'reimbursements', 'ignore'];
@@ -175,12 +175,9 @@ export function apiRouter(deps) {
         const ref = uow.getTxn(String(similarTo));
         if (!ref) throw new NotFoundError('Transaction not found');
         const key = merchantKey(ref);
-        const onCards = new Set(uow.list('accounts').filter((a) => a.role === 'expenses').map((a) => a.id));
-        targets = key ? [...uow.view.txns.values()].filter((t) => onCards.has(t.accountId) && merchantKey(t) === key) : [ref];
-        if (input.scope !== 'all') {
-          const current = buildLedger(uow.view, { today: today() });
-          targets = targets.filter((t) => t.id === ref.id || statementOf(t, uow.get('accounts', t.accountId), current).inPlay);
-        }
+        const current = buildLedger(uow.view, { today: today() });
+        targets = key ? [...chargesInScope(uow.view, current, input.scope === 'all' ? 'all' : 'open')].filter((t) => merchantKey(t) === key) : [];
+        if (!targets.some((t) => t.id === ref.id)) targets.push(ref);
       } else {
         targets = ids.slice(0, 2000).map((id) => uow.getTxn(String(id))).filter(Boolean);
       }
@@ -329,6 +326,19 @@ export function apiRouter(deps) {
 
   router.post('/reimbursements', async (req, res) => {
     const { result, state } = await change(req, (uow) => addManualReimbursement(uow, body(req)));
+    res.json({ ok: true, id: result, state });
+  });
+
+  // Money received that wasn't picked up as a reimbursement (before /:id routes).
+  router.get('/deposits', async (req, res) => {
+    const { snapshot, ledger } = await load(req.uid);
+    res.json({ deposits: otherDepositsView(snapshot, { today: ledger.today }) });
+  });
+
+  router.post('/reimbursements/from-txn', async (req, res) => {
+    const { txnId } = body(req);
+    if (typeof txnId !== 'string' || !txnId) throw new UserError('Choose a payment');
+    const { result, state } = await change(req, (uow) => countAsReimbursement(uow, txnId));
     res.json({ ok: true, id: result, state });
   });
 
