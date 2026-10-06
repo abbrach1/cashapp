@@ -4,6 +4,7 @@ import { hashId, newId } from '../lib/ids.js';
 import { isISODate } from '../lib/dates.js';
 import { UserError } from './errors.js';
 import { payableBills } from './ledger.js';
+import { getSettings } from './settings.js';
 
 /**
  * "Zelle Payment From Acme Corp Bacx2kl8qz1m" -> "Acme Corp"
@@ -40,13 +41,28 @@ export function isReimbursementDeposit(txn, account, settings) {
   return true;
 }
 
+/** Is this deposit from someone who pays you for your services (Settings)? */
+export function isIncomeDeposit(txn, account, settings) {
+  if (!account || account.role !== 'reimbursements') return false;
+  if (txn.pending || txn.amountCents >= 0) return false;
+  if (settings.trackingStartDate && txn.date < settings.trackingStartDate) return false;
+  const senders = (settings.incomeSenders ?? []).map((k) => k.toLowerCase().trim()).filter(Boolean);
+  if (!senders.length) return false;
+  const text = haystack(txn);
+  return senders.some((k) => text.includes(k));
+}
+
+/** Detected automatically and never touched by you. */
+const untouched = (r) => r.status === 'active' && !r.manual && !r.counted && !(r.allocations?.length) && !r.note;
+
 export function reimbursementIdFor(txnId) {
   return hashId('r', txnId);
 }
 
 /**
- * Create reimbursement records for new matching deposits and drop untouched
- * ones that no longer match (e.g. after changing the sender filter).
+ * Create records for new matching deposits (reimbursements, or payments for
+ * your services from the senders listed in Settings) and drop untouched ones
+ * that no longer match (e.g. after changing the sender filter).
  * @param {import('../store/model.js').UnitOfWork} uow
  * @param {Record<string, any>} settings
  */
@@ -56,7 +72,8 @@ export function detectReimbursements(uow, settings) {
   const byTxn = new Map(uow.list('reimbursements').filter((r) => r.txnId).map((r) => [r.txnId, r]));
   for (const txn of uow.view.txns.values()) {
     const account = uow.get('accounts', txn.accountId);
-    if (!isReimbursementDeposit(txn, account, settings)) continue;
+    const income = isIncomeDeposit(txn, account, settings);
+    if (!income && !isReimbursementDeposit(txn, account, settings)) continue;
     const existing = byTxn.get(txn.id) ?? uow.get('reimbursements', reimbursementIdFor(txn.id));
     const id = existing?.id ?? reimbursementIdFor(txn.id);
     matchedIds.add(id);
@@ -69,21 +86,35 @@ export function detectReimbursements(uow, settings) {
         amountCents: -txn.amountCents,
         sender: parseZelleSender(txn.rawDescription || txn.description) ?? parseZelleSender(txn.description),
         description: txn.description,
-        method: 'zelle',
-        status: 'active',
+        method: /zelle|quickpay/i.test(haystack(txn)) ? 'zelle' : 'other',
+        status: income ? 'income' : 'active',
         allocations: [],
         manual: false,
         createdAt: now,
       });
-    } else if (existing.amountCents !== -txn.amountCents || existing.date !== txn.date || existing.txnId !== txn.id) {
-      uow.patch('reimbursements', id, { amountCents: -txn.amountCents, date: txn.date, txnId: txn.id });
+    } else {
+      const patch = {};
+      if (existing.amountCents !== -txn.amountCents || existing.date !== txn.date || existing.txnId !== txn.id) {
+        Object.assign(patch, { amountCents: -txn.amountCents, date: txn.date, txnId: txn.id });
+      }
+      // A sender you said pays for your services: earlier detections follow.
+      if (income && untouched(existing)) patch.status = 'income';
+      if (Object.keys(patch).length) uow.patch('reimbursements', id, patch);
     }
   }
   for (const r of uow.list('reimbursements')) {
     if (!r.txnId || matchedIds.has(r.id)) continue;
-    const untouched = r.status === 'active' && !r.manual && !r.counted && !(r.allocations?.length) && !r.note;
-    if (untouched) uow.delete('reimbursements', r.id);
+    if (untouched(r)) uow.delete('reimbursements', r.id);
   }
+}
+
+/** Remember that payments from this sender are for your services. */
+export function addIncomeSender(uow, sender) {
+  const name = String(sender ?? '').trim();
+  if (!name) return;
+  const current = getSettings(uow.view).incomeSenders ?? [];
+  if (current.some((s) => s.toLowerCase() === name.toLowerCase())) return;
+  uow.patchSettings({ incomeSenders: [...current, name].slice(0, 20) });
 }
 
 /**
@@ -167,19 +198,22 @@ export function setAllocations(uow, id, allocations) {
 }
 
 /**
- * Count a deposit the automatic detection skipped (another sender name, a bank
- * transfer instead of Zelle...) as a reimbursement. It is matched to
- * statements like any other.
+ * Keep a deposit the automatic detection skipped (another sender name, a bank
+ * transfer instead of Zelle...) as a reimbursement, matched to statements like
+ * any other, or as a payment for your services (status "income").
  * @param {import('../store/model.js').UnitOfWork} uow
  * @param {string} txnId
+ * @param {'active'|'income'} [status]
  */
-export function countAsReimbursement(uow, txnId) {
+export function recordDeposit(uow, txnId, status = 'active') {
   const txn = uow.getTxn(txnId);
   if (!txn) throw new UserError('Transaction not found', 404);
-  if (txn.pending || txn.amountCents >= 0) throw new UserError('Only money you received can be a reimbursement');
+  if (txn.pending || txn.amountCents >= 0) throw new UserError('Only money you received can be recorded here');
   const existing = uow.list('reimbursements').find((r) => r.txnId === txn.id);
   if (existing) {
-    if (existing.status !== 'active' || !existing.counted) uow.patch('reimbursements', existing.id, { status: 'active', counted: true });
+    if (existing.status !== status || !existing.counted) {
+      uow.patch('reimbursements', existing.id, { status, counted: true, ...(status === 'active' ? {} : { allocations: [] }) });
+    }
     return existing.id;
   }
   const text = txn.rawDescription || txn.description;
@@ -193,7 +227,7 @@ export function countAsReimbursement(uow, txnId) {
     sender: parseZelleSender(text) ?? parseZelleSender(txn.description),
     description: txn.description,
     method: /zelle|quickpay/i.test(text) ? 'zelle' : 'other',
-    status: 'active',
+    status,
     allocations: [],
     manual: false,
     counted: true,

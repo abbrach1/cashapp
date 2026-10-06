@@ -24,6 +24,7 @@ export function SettingsPage() {
       reportTitle: s.reportTitle,
       reimbursementKeywords: listText(s.reimbursementKeywords),
       senderFilters: listText(s.senderFilters),
+      incomeSenders: listText(s.incomeSenders),
       trackingStartDate: s.trackingStartDate ?? '',
       excludeFeesByDefault: s.excludeFeesByDefault,
       excludeRewardsByDefault: s.excludeRewardsByDefault,
@@ -98,10 +99,13 @@ export function SettingsPage() {
           <${Field} label="Only from these senders" hint="Comma separated, e.g. your company name as it appears in Zelle. Empty = anyone.">
             <input value=${form.senderFilters} placeholder="Acme Corp" onInput=${set('senderFilters')} />
           <//>
+          <${Field} label="Payments for services from" hint="Comma separated. Money from these senders is kept as payment for your services, never as a reimbursement.">
+            <input value=${form.incomeSenders} placeholder="e.g. a client's name" onInput=${set('incomeSenders')} />
+          <//>
         </div>
         <label class="check"><input type="checkbox" checked=${form.autoMatch} onChange=${set('autoMatch')} />
           <span>Match payments to statements automatically when the amount fits exactly</span></label>
-        <div><${AsyncButton} class="btn primary" onClick=${() => save(['reimbursementKeywords', 'senderFilters', 'autoMatch'])}>Save<//></div>
+        <div><${AsyncButton} class="btn primary" onClick=${() => save(['reimbursementKeywords', 'senderFilters', 'incomeSenders', 'autoMatch'])}>Save<//></div>
       </div>
     </div>
 

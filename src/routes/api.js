@@ -7,7 +7,7 @@ import { reconcile } from '../core/reconcile.js';
 import { claimInfo, sanitizeClaimChange } from '../core/claims.js';
 import { getSettings, sanitizeSettingsPatch } from '../core/settings.js';
 import { setClosingDate } from '../core/bills.js';
-import { addManualReimbursement, countAsReimbursement, setAllocations } from '../core/reimbursements.js';
+import { addIncomeSender, addManualReimbursement, recordDeposit, setAllocations } from '../core/reimbursements.js';
 import { ingest, defaultRole } from '../core/ingest.js';
 import { connectPlaid, connectSimplefin, disconnect, plaidLinkToken, syncAll, syncConnection } from '../core/sync.js';
 import { parseChaseCSV } from '../providers/chaseCsv.js';
@@ -335,10 +335,20 @@ export function apiRouter(deps) {
     res.json({ deposits: otherDepositsView(snapshot, { today: ledger.today }) });
   });
 
+  /**
+   * Record a deposit as a reimbursement (`as: "reimbursement"`, the default)
+   * or as a payment for your services (`as: "income"`). With `alwaysForSender`,
+   * later payments from the same sender are treated as payments for services.
+   */
   router.post('/reimbursements/from-txn', async (req, res) => {
-    const { txnId } = body(req);
+    const { txnId, as = 'reimbursement', alwaysForSender = false } = body(req);
     if (typeof txnId !== 'string' || !txnId) throw new UserError('Choose a payment');
-    const { result, state } = await change(req, (uow) => countAsReimbursement(uow, txnId));
+    if (!['reimbursement', 'income'].includes(as)) throw new UserError('Unknown kind of payment');
+    const { result, state } = await change(req, (uow) => {
+      const id = recordDeposit(uow, txnId, as === 'income' ? 'income' : 'active');
+      if (as === 'income' && alwaysForSender) addIncomeSender(uow, uow.get('reimbursements', id)?.sender);
+      return id;
+    });
     res.json({ ok: true, id: result, state });
   });
 
@@ -349,14 +359,16 @@ export function apiRouter(deps) {
       if (!r) throw new NotFoundError('Reimbursement not found');
       const patch = {};
       if ('status' in input) {
-        if (!['active', 'ignored'].includes(input.status)) throw new UserError('Unknown status');
+        // active: a reimbursement · income: a payment for your services · ignored: neither
+        if (!['active', 'ignored', 'income'].includes(input.status)) throw new UserError('Unknown status');
         patch.status = input.status;
         patch.manual = true;
-        if (input.status === 'ignored') patch.allocations = [];
+        if (input.status !== 'active') patch.allocations = [];
       }
       if ('note' in input) patch.note = input.note ? String(input.note).trim().slice(0, 500) || null : null;
       if ('sender' in input) patch.sender = input.sender ? String(input.sender).trim().slice(0, 120) || null : null;
-      uow.patch('reimbursements', r.id, patch);
+      const updated = uow.patch('reimbursements', r.id, patch);
+      if (input.status === 'income' && input.alwaysForSender === true) addIncomeSender(uow, updated.sender);
     });
     res.json({ ok: true, state });
   });

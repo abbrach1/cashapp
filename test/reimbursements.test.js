@@ -160,3 +160,31 @@ test('manual reimbursements', () => {
   assert.throws(() => addManualReimbursement(w.uow, { date: 'x', amountCents: 1 }), /date/);
   assert.throws(() => addManualReimbursement(w.uow, { date: '2026-09-15', amountCents: 0 }), /amount/);
 });
+
+test('a client paying for your services is kept as income, never a reimbursement', () => {
+  const { w, chk } = world();
+  w.uow.patchSettings({ senderFilters: [] }); // count Zelles from anyone
+  w.txn(chk, '2026-09-26', -30000, 'Zelle Payment From Acme Corp Bac9xk2m3n4p');
+  w.txn(chk, '2026-09-27', -5500, 'Zelle Payment From YEHUDA SCHER Wfct8k2m3n4p');
+  reconcile(w.uow, { today: TODAY });
+  let rs = w.uow.list('reimbursements');
+  assert.deepEqual(rs.map((r) => [r.sender, r.status]).sort(), [['Acme Corp', 'active'], ['YEHUDA SCHER', 'active']]);
+
+  // Once the sender is listed, untouched payments from them become income...
+  w.uow.patchSettings({ incomeSenders: ['Yehuda Scher'] });
+  w.txn(chk, '2026-09-29', -7000, 'Zelle Payment From YEHUDA SCHER Wfct9z2m3n4q');
+  reconcile(w.uow, { today: TODAY });
+  rs = w.uow.list('reimbursements');
+  assert.deepEqual(rs.filter((r) => r.sender === 'YEHUDA SCHER').map((r) => r.status), ['income', 'income']);
+  // ...even when the reimbursement sender filter would skip them.
+  w.uow.patchSettings({ senderFilters: ['acme'] });
+  w.txn(chk, '2026-09-30', -2500, 'YEHUDA SCHER CONSULTING ACH PPD');
+  reconcile(w.uow, { today: TODAY });
+  const ledger = buildLedger(w.uow.view, { today: TODAY });
+  const income = [...ledger.reimbursements.values()].filter((r) => r.status === 'income');
+  assert.equal(income.length, 3);
+  assert.ok(income.every((r) => r.allocations.length === 0 && r.suggestion.length === 0));
+  assert.equal(ledger.dashboard.incomeYtdCents, 5500 + 7000 + 2500);
+  assert.equal(ledger.dashboard.receivedYtdCents, 30000, 'only the company payment counts as reimbursed');
+  assert.equal(ledger.dashboard.unmatchedCount, 0);
+});

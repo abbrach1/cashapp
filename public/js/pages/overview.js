@@ -5,13 +5,14 @@ import { navigate } from '../router.js';
 import { attempt, refresh, useStore } from '../store.js';
 import { AsyncButton, Money, Tile, Empty } from '../ui.js';
 import { BillsTable } from '../components/bills.js';
-import { AllocationDialog } from '../components/dialogs.js';
+import { AllocationDialog, ServicesDialog } from '../components/dialogs.js';
 import { useSendRequest } from '../components/request.js';
 import { ConnectOptions } from './accounts.js';
 import { historyLoading, reconnectPlaid } from '../connect.js';
 
 function Attention({ state }) {
   const [allocating, setAllocating] = useState(null);
+  const [services, setServices] = useState(null);
   const [openRequest, requestDialog] = useSendRequest();
   const items = [];
   const today = state.today;
@@ -62,8 +63,11 @@ function Attention({ state }) {
   for (const r of state.reimbursements.filter((x) => x.status === 'active' && x.unallocatedCents > 0)) {
     items.push(html`<li key=${`z-${r.id}`}>
       <div class="icon-dot match">⇄</div>
-      <div class="grow"><div class="merchant">Match ${money(r.unallocatedCents)} from ${r.sender ?? 'Zelle'}</div><div class="sub-desc">Received ${longDate(r.date)} — which statement does it pay?</div></div>
-      <button class="btn sm primary" onClick=${() => setAllocating(r)}>Match</button>
+      <div class="grow"><div class="merchant">${money(r.unallocatedCents)} from ${r.sender ?? 'Zelle'} isn't matched yet</div><div class="sub-desc">Received ${longDate(r.date)} — a reimbursement for a statement, or a payment for your services?</div></div>
+      <div class="row wrap actions">
+        <button class="btn sm primary" onClick=${() => setAllocating(r)}>Match to statement</button>
+        ${r.allocatedCents ? null : html`<button class="btn sm" onClick=${() => setServices(r)}>Payment for services</button>`}
+      </div>
     </li>`);
   }
   if (!items.length) return null;
@@ -71,13 +75,14 @@ function Attention({ state }) {
   const shown = items.length > MAX ? items.slice(0, MAX - 1) : items;
   return html`<div class="card">
     <div class="card-head"><h2>Needs your attention</h2><span class="muted small">${plural(items.length, 'item')}</span></div>
-    <ul class="list">
+    <ul class="list attention">
       ${shown}
       ${items.length > MAX
         ? html`<li key="more"><span class="grow small muted">and ${items.length - shown.length} more</span><a class="btn sm" href="#/bills?filter=owed">See all statements</a></li>`
         : null}
     </ul>
     <${AllocationDialog} open=${Boolean(allocating)} reimbursement=${allocating} onClose=${() => setAllocating(null)} />
+    <${ServicesDialog} open=${Boolean(services)} payment=${services} onClose=${() => setServices(null)} />
     ${requestDialog}
   </div>`;
 }
@@ -169,7 +174,9 @@ export function OverviewPage() {
               )}
             </ul>`
           : html`<${Empty} title="No reimbursements yet" icon="⇄">Incoming Zelle payments from your company show up here automatically.<//>`}
-        <div class="card-foot small muted">Received this year: <b>${money(d.receivedYtdCents)}</b></div>
+        <div class="card-foot small muted">
+          Reimbursed this year: <b>${money(d.receivedYtdCents)}</b>${d.incomeYtdCents ? html` · for your services: <b>${money(d.incomeYtdCents)}</b>` : null}
+        </div>
       </div>
     </div>
   </div>`;

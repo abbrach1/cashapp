@@ -307,6 +307,8 @@ function buildDashboard(snapshot, ledger) {
     unpaidCents: 0,
     currentCycleCents: 0,
     receivedYtdCents: 0,
+    // Payments for your services (not reimbursements) received this year.
+    incomeYtdCents: 0,
     unmatchedCount: 0,
     unmatchedCents: 0,
     accountsNeedingSetup: [],
@@ -330,6 +332,7 @@ function buildDashboard(snapshot, ledger) {
     }
   }
   for (const r of ledger.reimbursements.values()) {
+    if (r.status === 'income' && r.date.startsWith(year)) d.incomeYtdCents += r.amountCents;
     if (r.status !== 'active') continue;
     if (r.date.startsWith(year)) d.receivedYtdCents += r.amountCents;
     if (r.unallocatedCents > 0) {

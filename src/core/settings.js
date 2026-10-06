@@ -13,6 +13,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   reimbursementKeywords: ['zelle', 'quickpay'],
   // ...and, if any are listed, one of these sender names.
   senderFilters: [],
+  // Money from these senders pays for your services (income): kept in your
+  // records, never counted as a reimbursement.
+  incomeSenders: [],
   // Only statements closing on or after this date are tracked.
   trackingStartDate: null,
   // Card fees/interest and rewards redemptions are not expenses you made for
@@ -30,7 +33,7 @@ export function getSettings(snapshot) {
 }
 
 const TEXT_FIELDS = ['yourName', 'yourEmail', 'companyName', 'companyEmail', 'zelleHandle', 'reportTitle'];
-const LIST_FIELDS = ['reimbursementKeywords', 'senderFilters'];
+const LIST_FIELDS = ['reimbursementKeywords', 'senderFilters', 'incomeSenders'];
 const BOOL_FIELDS = ['excludeFeesByDefault', 'excludeRewardsByDefault', 'autoMatch'];
 
 /**

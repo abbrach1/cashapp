@@ -342,3 +342,46 @@ export function RuleDialog({ open, onClose, initialPattern = '', accountId = nul
 export function notifyError(err) {
   toast(err.message, 'error');
 }
+
+// ---------------------------------------------------------------------------
+// Money that paid for your services: kept in your records, not a reimbursement
+
+/**
+ * `payment`: { id, amountCents, date, sender } — a recorded payment, or a
+ * deposit from "Other money received" when `fromDeposit` is set.
+ */
+export function ServicesDialog({ payment, fromDeposit = false, open, onClose }) {
+  const [always, setAlways] = useState(true);
+  useEffect(() => {
+    if (open) setAlways(true);
+  }, [open, payment?.id]);
+  if (!payment) return null;
+  const sender = payment.sender;
+  const save = () =>
+    attempt(async () => {
+      const alwaysForSender = Boolean(sender) && always;
+      const res = fromDeposit
+        ? await post('/reimbursements/from-txn', { txnId: payment.id, as: 'income', alwaysForSender })
+        : await post(`/reimbursements/${payment.id}`, { status: 'income', alwaysForSender });
+      refresh(res.state);
+      onClose(true);
+    }, `Kept as a payment for your services${sender && always ? `, and so will future payments from ${sender}` : ''}.`);
+  return html`<${Modal}
+    open=${open}
+    onClose=${() => onClose(false)}
+    title="Payment for services"
+    footer=${html`<button class="btn" onClick=${() => onClose(false)}>Cancel</button>
+      <${AsyncButton} class="btn primary" onClick=${save}>Keep as payment for services<//>`}
+  >
+    <div class="stack">
+      <p style="margin:0">
+        <b>${money(payment.amountCents)}</b>${sender ? html` from <b>${sender}</b>` : ''} on ${longDate(payment.date)} stays in your records as money you earned.
+        It won't count as a reimbursement or be matched to a statement.
+      </p>
+      ${sender
+        ? html`<label class="check"><input type="checkbox" checked=${always} onChange=${(e) => setAlways(e.currentTarget.checked)} />
+            <span>Do the same for future payments from ${sender}<div class="small muted">You can change this in Settings → Finding reimbursements.</div></span></label>`
+        : null}
+    </div>
+  <//>`;
+}

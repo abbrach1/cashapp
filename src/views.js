@@ -3,6 +3,7 @@
 import { accountLabel } from './exports/report.js';
 import { addDays } from './lib/dates.js';
 import { IN_PLAY_STATUSES, classifiable, isReviewed, merchantCounts, merchantKey, statementOf } from './core/review.js';
+import { parseZelleSender } from './core/reimbursements.js';
 
 export function connectionView(c) {
   return {
@@ -296,7 +297,8 @@ export function otherDepositsView(snapshot, { today, days = 90 }) {
   for (const t of snapshot.txns.values()) {
     const account = snapshot.accounts.get(t.accountId);
     if (account?.role !== 'reimbursements' || t.pending || t.amountCents >= 0 || t.date < since || linked.has(t.id)) continue;
-    out.push({ id: t.id, accountId: t.accountId, accountLabel: accountLabel(account), date: t.date, description: t.description, amountCents: -t.amountCents });
+    const sender = parseZelleSender(t.rawDescription || t.description) ?? parseZelleSender(t.description);
+    out.push({ id: t.id, accountId: t.accountId, accountLabel: accountLabel(account), date: t.date, description: t.description, sender, amountCents: -t.amountCents });
   }
   return out.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.id < b.id ? -1 : 1)).slice(0, 200);
 }

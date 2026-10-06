@@ -383,3 +383,50 @@ CREDIT,09/27/2026,"Zelle Payment From Jordan Lee Wfct0q2k3m9x",45.00,QUICKPAY_CR
   const uberAug = detail.transactions.find((x) => x.description === 'UBER *TRIP');
   assert.equal(uberAug.similarCount, 2, 'the open-cycle Uber and this one');
 });
+
+test('a Zelle can be kept as a payment for services, and future ones from that sender follow', async (t) => {
+  const s = await serve();
+  t.after(s.close);
+  const bank = `Details,Posting Date,Description,Amount,Type,Balance,Check or Slip #
+CREDIT,10/01/2026,"Zelle Payment From YEHUDA SCHER Wfct0q2k3m9x",55.00,QUICKPAY_CREDIT,5355.00,,
+CREDIT,09/28/2026,"CLIENT CO INVOICE 1042 PPD",400.00,ACH_CREDIT,5300.00,,
+`;
+  let r = await s.call('POST', '/api/import/csv', { filename: 'Chase9912_Activity.CSV', content: bank });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  let state = r.body.state;
+  const zelle = state.reimbursements.find((x) => x.sender === 'YEHUDA SCHER');
+  assert.equal(state.dashboard.unmatchedCount, 1);
+
+  r = await s.call('POST', `/api/reimbursements/${zelle.id}`, { status: 'income', alwaysForSender: true });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  state = r.body.state;
+  assert.equal(state.reimbursements.find((x) => x.id === zelle.id).status, 'income');
+  assert.deepEqual(state.settings.incomeSenders, ['YEHUDA SCHER']);
+  assert.equal(state.dashboard.unmatchedCount, 0);
+  assert.equal(state.dashboard.incomeYtdCents, 5500);
+
+  // The next Zelle from the same person is filed the same way.
+  const next = `Details,Posting Date,Description,Amount,Type,Balance,Check or Slip #
+CREDIT,10/02/2026,"Zelle Payment From YEHUDA SCHER Wfct7r2k3m1y",80.00,QUICKPAY_CREDIT,5435.00,,
+`;
+  r = await s.call('POST', '/api/import/csv', { filename: 'x.csv', content: next, accountId: zelle.accountId });
+  state = r.body.state;
+  assert.deepEqual(state.reimbursements.filter((x) => x.sender === 'YEHUDA SCHER').map((x) => x.status), ['income', 'income']);
+  assert.equal(state.dashboard.unmatchedCount, 0);
+
+  // A bank transfer from a client, found under "Other money received".
+  r = await s.call('GET', '/api/deposits');
+  const ach = r.body.deposits.find((d) => d.description.startsWith('CLIENT CO'));
+  r = await s.call('POST', '/api/reimbursements/from-txn', { txnId: ach.id, as: 'income' });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.state.reimbursements.find((x) => x.txnId === ach.id).status, 'income');
+  assert.equal(r.body.state.dashboard.incomeYtdCents, 5500 + 8000 + 40000);
+
+  r = await s.call('POST', '/api/reimbursements/from-txn', { txnId: ach.id, as: 'gift' });
+  assert.equal(r.status, 400);
+  r = await s.call('POST', `/api/reimbursements/${zelle.id}`, { status: 'paid' });
+  assert.equal(r.status, 400);
+  // Changed your mind: it was a reimbursement after all.
+  r = await s.call('POST', `/api/reimbursements/${zelle.id}`, { status: 'active' });
+  assert.equal(r.body.state.reimbursements.find((x) => x.id === zelle.id).status, 'active');
+});

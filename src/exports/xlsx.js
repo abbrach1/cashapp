@@ -255,7 +255,7 @@ export async function ledgerXLSX(snapshot, ledger) {
     { header: 'Amount', key: 'amount', width: 13 },
     { header: 'Unallocated', key: 'unallocated', width: 13 },
     { header: 'Applied to', key: 'applied', width: 60 },
-    { header: 'Status', key: 'status', width: 10 },
+    { header: 'Kind', key: 'status', width: 22 },
   ];
   styleHeader(rs.getRow(1));
   const reimbs = [...ledger.reimbursements.values()].sort((a, b) => (a.date < b.date ? 1 : -1));
@@ -274,7 +274,7 @@ export async function ledgerXLSX(snapshot, ledger) {
       amount: dollars(r.amountCents),
       unallocated: dollars(r.unallocatedCents),
       applied,
-      status: r.status,
+      status: { active: 'Reimbursement', income: 'Payment for services', ignored: 'Not a reimbursement' }[r.status] ?? r.status,
     });
     row.getCell('date').numFmt = 'mm/dd/yyyy';
     row.getCell('amount').numFmt = MONEY;

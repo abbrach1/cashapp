@@ -1322,6 +1322,15 @@ kbd {
   .show-mobile-inline {
     display: inline;
   }
+  .list.attention > li {
+    flex-wrap: wrap;
+  }
+  .list.attention > li > .grow {
+    flex-basis: calc(100% - 60px);
+  }
+  .list.attention > li > :last-child {
+    margin-left: auto;
+  }
   .cl-group-head {
     padding: 12px 14px;
   }
